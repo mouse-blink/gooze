@@ -42,33 +42,28 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		paths = []string{"."}
 	}
 
-	// Process each path
-	var allSources []m.Source
+	// Convert string paths to m.Path type
+	mPaths := make([]m.Path, len(paths))
+	for i, p := range paths {
+		mPaths[i] = m.Path(p)
+	}
 
-	for _, path := range paths {
-		sources, err := processPath(path)
-		if err != nil {
-			return fmt.Errorf("error processing %s: %w", path, err)
-		}
-
-		allSources = append(allSources, sources...)
+	// Get all sources from all paths
+	wf := domain.NewWorkflow()
+	sources, err := wf.GetSources(mPaths...)
+	if err != nil {
+		return fmt.Errorf("error processing paths: %w", err)
 	}
 
 	// Handle list flag
 	if listFlag {
-		return listSources(cmd, allSources)
+		return listSources(cmd, sources)
 	}
 
 	// TODO: implement mutation testing logic
 	cmd.Println("Mutation testing not yet implemented. Use --list to see source files.")
 
 	return nil
-}
-
-func processPath(path string) ([]m.Source, error) {
-	wf := domain.NewWorkflow()
-	// GetSources now handles both recursive (./...) and non-recursive patterns
-	return wf.GetSources(m.Path(path))
 }
 
 func listSources(cmd *cobra.Command, sources []m.Source) error {
