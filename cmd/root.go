@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	"github.com/mouse-blink/gooze/internal/domain"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
@@ -55,28 +56,17 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error processing paths: %w", err)
 	}
 
-	// Handle list flag
+	// Use factory to create appropriate UI based on TTY detection
+	useTTY := adapter.IsTTY(cmd.OutOrStdout())
+	ui := adapter.NewUI(cmd, useTTY)
+
+	// Handle list flag - show sources with UI
 	if listFlag {
-		return listSources(cmd, sources)
+		return ui.Display(sources)
 	}
 
-	// TODO: implement mutation testing logic
-	cmd.Println("Mutation testing not yet implemented. Use --list to see source files.")
-
-	return nil
-}
-
-func listSources(cmd *cobra.Command, sources []m.Source) error {
-	if len(sources) == 0 {
-		cmd.Println("No source files found")
-		return nil
-	}
-
-	for _, source := range sources {
-		cmd.Println(source.Origin)
-	}
-
-	return nil
+	// Without -l flag, show "not implemented" message
+	return ui.ShowNotImplemented(len(sources))
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
