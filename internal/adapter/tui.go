@@ -56,7 +56,7 @@ func (p *TUI) ShowNotImplemented(count int) error {
 	_, err := fmt.Fprint(p.output, model.View())
 
 	return err
-}// tuiModel represents the Bubble Tea model for displaying source files.
+} // tuiModel represents the Bubble Tea model for displaying source files.
 type tuiModel struct {
 	sources        []m.Source
 	notImplemented bool

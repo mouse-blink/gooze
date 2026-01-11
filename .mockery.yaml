@@ -1,14 +1,15 @@
+---
 # Mockery configuration for generating mocks
 with-expecter: true
 disable-version-string: true
 packages:
   github.com/mouse-blink/gooze/internal/domain:
     config:
-      dir: "internal/domain/mocks"
+      dir: internal/domain/mocks
     interfaces:
       Workflow:
   github.com/mouse-blink/gooze/internal/adapter:
     config:
-      dir: "internal/adapter/mocks"
+      dir: internal/adapter/mocks
     interfaces:
       UI:

@@ -1,4 +1,5 @@
-version: "2"
+---
+version: '2'
 run:
   timeout: 5m
   tests: false
@@ -6,17 +7,17 @@ run:
 
 linters:
   disable:
-    - depguard
-    - exhaustruct
-    - gochecknoinits
-    - wsl
+  - depguard
+  - exhaustruct
+  - gochecknoinits
+  - wsl
   enable:
-    - revive
-    - staticcheck
-    - govet
-    - errcheck
-    - wsl_v5
-    - funlen
+  - revive
+  - staticcheck
+  - govet
+  - errcheck
+  - wsl_v5
+  - funlen
 
 linters-settings:
   funlen:
@@ -33,6 +34,6 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude-files:
-    - ".*_test\\.go$"
+  - .*_test\.go$
   exclude-dirs:
-    - examples
+  - examples

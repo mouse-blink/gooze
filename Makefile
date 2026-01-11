@@ -8,19 +8,33 @@ MOCKERY_VERSION := v2.53.5
 # Whitelisted packages (exclude examples explicitly)
 PKG_WHITELIST :=  ./cmd/... ./internal/...
 
-.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks
+.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit
 
-all: build
+all: install-precommit build
 
-install-tools:
-	@echo "Installing development tools into $(bin)..."
+
+prepare-env:
+	@echo "Preparing development environment..."
 	@mkdir -p $(bin)
+
+install-precommit-tools: prepare-env
+	@echo "Installing pre-commit..."
+	@pip install --user pre-commit || pip3 install --user pre-commit
+
+install-cobra-cli: prepare-env
 	@echo "Installing cobra-cli $(COBRA_CLI_VERSION)..."
 	@GOBIN=$(abspath $(bin)) go install github.com/spf13/cobra-cli@$(COBRA_CLI_VERSION)
+
+install-golangci-lint: prepare-env
 	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
 	@curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(abspath $(bin)) $(GOLANGCI_LINT_VERSION)
+
+install-mockery: prepare-env
 	@echo "Installing mockery $(MOCKERY_VERSION)..."
 	@GOBIN=$(abspath $(bin)) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
+
+install-tools: install-cobra-cli install-precommit-tools install-golangci-lint install-mockery
+	@echo "All tools installed."
 
 
 build:
@@ -54,3 +68,8 @@ clean-mocks:
 mocks: clean-mocks
 	@echo "Generating mocks..."
 	@$(bin)/mockery --all --config .mockery.yaml
+
+install-precommit: install-precommit-tools
+	@echo "Installing pre-commit hooks..."
+	@pre-commit install
+	@echo "✅ Pre-commit hooks installed!"
