@@ -34,7 +34,7 @@ func TestIsTTY_WithTerminal(t *testing.T) {
 	// Note: This test checks if the function works correctly
 	// It will return true if running in a real terminal, false otherwise
 	result := IsTTY(os.Stdout)
-	
+
 	// We can't assert exact value as it depends on test environment
 	// but we can verify it doesn't panic and returns a bool
 	_ = result
@@ -43,11 +43,11 @@ func TestIsTTY_WithTerminal(t *testing.T) {
 func TestIsTTY_WithNonTerminal(t *testing.T) {
 	// Create a buffer which is not a terminal
 	var buf bytes.Buffer
-	
+
 	// IsTTY should handle non-file outputs gracefully
 	// This should not panic
 	result := IsTTY(&buf)
-	
+
 	// A buffer is never a TTY
 	if result {
 		t.Error("IsTTY(buffer) = true, want false")

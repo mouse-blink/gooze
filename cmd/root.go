@@ -51,6 +51,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	// Get all sources from all paths
 	wf := domain.NewWorkflow()
+
 	sources, err := wf.GetSources(mPaths...)
 	if err != nil {
 		return fmt.Errorf("error processing paths: %w", err)

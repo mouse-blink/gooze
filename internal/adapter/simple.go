@@ -33,5 +33,6 @@ func (p *SimpleUI) Display(sources []m.Source) error {
 func (p *SimpleUI) ShowNotImplemented(count int) error {
 	p.cmd.Printf("Found %d source files\n", count)
 	p.cmd.Println("Mutation testing not yet implemented. Use --list to see source files.")
+
 	return nil
 }

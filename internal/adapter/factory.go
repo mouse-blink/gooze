@@ -15,6 +15,7 @@ func NewUI(cmd *cobra.Command, useTTY bool) UI {
 	if useTTY {
 		return NewTUI(cmd.OutOrStdout())
 	}
+
 	return NewSimpleUI(cmd)
 }
 
