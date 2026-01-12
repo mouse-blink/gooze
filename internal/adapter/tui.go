@@ -108,11 +108,14 @@ func (tm tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return tm, nil
 }
 
+//nolint:cyclop,exhaustive // Key handling requires multiple cases for UI navigation
 func (tm tuiModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC, tea.KeyEsc:
 		tm.quitting = true
 		return tm, tea.Quit
+	default:
+		// Handle other key types in the string switch below
 	}
 
 	switch msg.String() {
@@ -170,7 +173,7 @@ func (tm tuiModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return tm, nil
 }
 
-// itemsPerPage calculates how many items can fit on screen
+// itemsPerPage calculates how many items can fit on screen.
 func (tm tuiModel) itemsPerPage() int {
 	if tm.height == 0 {
 		return 10 // Default
@@ -190,7 +193,7 @@ func (tm tuiModel) itemsPerPage() int {
 	return available
 }
 
-// maxOffset returns the maximum scroll offset
+// maxOffset returns the maximum scroll offset.
 func (tm tuiModel) maxOffset() int {
 	itemCount := len(tm.sources)
 
@@ -207,7 +210,7 @@ func (tm tuiModel) maxOffset() int {
 	return maxOff
 }
 
-// needsPagination returns true if the list is too large to fit on screen
+// needsPagination returns true if the list is too large to fit on screen.
 func (tm tuiModel) needsPagination() bool {
 	if tm.notImplemented {
 		return false

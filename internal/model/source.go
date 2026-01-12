@@ -3,24 +3,24 @@ package model
 // Path represents a file system path.
 type Path string
 
-// ScopeType defines where code elements can be mutated
+// ScopeType defines where code elements can be mutated.
 type ScopeType string
 
 const (
 	// ScopeGlobal represents package-level declarations (const, var, type).
-	// Always scanned for mutations like: boolean literals, numbers in consts
+	// Always scanned for mutations like: boolean literals, numbers in consts.
 	ScopeGlobal ScopeType = "global"
 
 	// ScopeInit represents init() functions.
-	// Scanned for all mutation types
+	// Scanned for all mutation types.
 	ScopeInit ScopeType = "init"
 
 	// ScopeFunction represents regular function bodies.
-	// Scanned for function-specific mutations
+	// Scanned for function-specific mutations.
 	ScopeFunction ScopeType = "function"
 )
 
-// CodeScope represents a region of code with its scope type and line range
+// CodeScope represents a region of code with its scope type and line range.
 type CodeScope struct {
 	Type      ScopeType
 	StartLine int

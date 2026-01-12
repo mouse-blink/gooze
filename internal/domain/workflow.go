@@ -31,7 +31,7 @@ func NewWorkflow() Workflow {
 // It distinguishes between:
 // - Global scope (const, var, type declarations) - for mutations like boolean literals, numbers
 // - Init functions - for all mutation types
-// - Regular functions - for function-specific mutations
+// - Regular functions - for function-specific mutations.
 func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
 	if len(roots) == 0 {
 		return []m.Source{}, nil
@@ -64,7 +64,7 @@ func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
 	return allSources, nil
 }
 
-// scanPath scans a single path (with optional /... suffix) for Go source files
+// scanPath scans a single path (with optional /... suffix) for Go source files.
 func (w *workflow) scanPath(root m.Path) ([]m.Source, error) {
 	rootStr, recursive := parseRootPath(string(root))
 
@@ -103,7 +103,7 @@ func (w *workflow) scanPath(root m.Path) ([]m.Source, error) {
 	return sources, nil
 }
 
-// parseRootPath extracts the root path and recursive flag from a path string
+// parseRootPath extracts the root path and recursive flag from a path string.
 func parseRootPath(rootStr string) (path string, recursive bool) {
 	if len(rootStr) >= 4 && rootStr[len(rootStr)-4:] == "/..." {
 		return rootStr[:len(rootStr)-4], true
@@ -112,7 +112,7 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-// handleDirectory determines if directory traversal should continue
+// handleDirectory determines if directory traversal should continue.
 func handleDirectory(path, rootStr string, recursive bool) error {
 	if !recursive && path != rootStr {
 		return filepath.SkipDir
@@ -121,7 +121,7 @@ func handleDirectory(path, rootStr string, recursive bool) error {
 	return nil
 }
 
-// processFile parses and extracts scopes from a single Go file
+// processFile parses and extracts scopes from a single Go file.
 func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool, error) {
 	// Skip non-Go files
 	if filepath.Ext(path) != ".go" {
@@ -131,7 +131,7 @@ func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool
 	file, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if parseErr != nil {
 		// Skip files with parse errors instead of failing the entire scan
-		return m.Source{}, false, nil
+		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip parse errors
 	}
 
 	scopes := extractScopes(fset, file)
@@ -163,7 +163,7 @@ func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool
 	return source, true, nil
 }
 
-// extractScopes analyzes an AST and returns all relevant code scopes
+// extractScopes analyzes an AST and returns all relevant code scopes.
 func extractScopes(fset *token.FileSet, file *ast.File) []m.CodeScope {
 	var scopes []m.CodeScope
 
@@ -213,7 +213,7 @@ func extractScopes(fset *token.FileSet, file *ast.File) []m.CodeScope {
 	return scopes
 }
 
-// extractFunctionLines extracts line numbers for functions only (backward compatibility)
+// extractFunctionLines extracts line numbers for functions only (backward compatibility).
 func extractFunctionLines(scopes []m.CodeScope) []int {
 	var lines []int
 
@@ -232,7 +232,7 @@ func extractFunctionLines(scopes []m.CodeScope) []int {
 	return lines
 }
 
-// hasGlobalScopes checks if there are any global const/var scopes
+// hasGlobalScopes checks if there are any global const/var scopes.
 func hasGlobalScopes(scopes []m.CodeScope) bool {
 	for _, scope := range scopes {
 		if scope.Type == m.ScopeGlobal {
@@ -243,9 +243,9 @@ func hasGlobalScopes(scopes []m.CodeScope) bool {
 	return false
 }
 
-// hashFile computes SHA-256 hash of a file
+// hashFile computes SHA-256 hash of a file.
 func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path comes from trusted file system walk
 	if err != nil {
 		return "", err
 	}

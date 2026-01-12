@@ -18,6 +18,64 @@ linters:
   - errcheck
   - wsl_v5
   - funlen
+  - ineffassign
+  - unused
+  - misspell
+  - unconvert
+  - unparam
+  - gocyclo
+  - gocognit
+  - dupl
+  - prealloc
+  - whitespace
+  - nolintlint
+  - asciicheck
+  - bidichk
+  - bodyclose
+  - canonicalheader
+  - containedctx
+  - contextcheck
+  - copyloopvar
+  - cyclop
+  - dogsled
+  - dupword
+  - durationcheck
+  - errname
+  - errorlint
+  - exhaustive
+  - fatcontext
+  - forcetypeassert
+  - goconst
+  - gocritic
+  - godot
+  - gocheckcompilerdirectives
+  - gosec
+  - grouper
+  - importas
+  - inamedparam
+  - interfacebloat
+  - intrange
+  - makezero
+  - mirror
+  - nakedret
+  - nestif
+  - nilerr
+  - nilnil
+  - noctx
+  - nosprintfhostport
+  - predeclared
+  - reassign
+  - sloglint
+  - tagalign
+  - thelper
+  - unconvert
+  - usestdlibvars
+  - wastedassign
+
+formatters:
+  enable:
+  - gofmt
+  - goimports
 
 linters-settings:
   funlen:
@@ -28,6 +86,14 @@ linters-settings:
     allow-first-in-block: true
     allow-whole-block: false
     branch-max-lines: 2
+  gocyclo:
+    min-complexity: 15
+  gocognit:
+    min-complexity: 20
+  dupl:
+    threshold: 100
+  misspell:
+    locale: US
 
 issues:
   exclude-use-default: false
