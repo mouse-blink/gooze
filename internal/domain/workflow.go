@@ -17,6 +17,8 @@ import (
 // Workflow defines the interface for mutation testing operations.
 type Workflow interface {
 	GetSources(roots ...m.Path) ([]m.Source, error)
+	GenerateMutations(source m.Source) ([]m.Mutation, error)
+	EstimateMutations(sources m.Source, mutationType m.MutationType) (int, error)
 }
 
 type workflow struct{}
@@ -262,4 +264,18 @@ func hashFile(path string) (string, error) {
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// EstimateMutations calculates the total number of mutations for a source and mutation type.
+func (w *workflow) EstimateMutations(source m.Source, mutationType m.MutationType) (int, error) {
+	if mutationType != m.MutationArithmetic {
+		return 0, fmt.Errorf("unsupported mutation type: %v", mutationType)
+	}
+
+	mutations, err := w.GenerateMutations(source)
+	if err != nil {
+		return 0, fmt.Errorf("failed to estimate mutations for %s: %w", source.Origin, err)
+	}
+
+	return len(mutations), nil
 }

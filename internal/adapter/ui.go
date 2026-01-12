@@ -12,4 +12,6 @@ type UI interface {
 	Display(sources []m.Source) error
 	// ShowNotImplemented displays a "not implemented" message with file count.
 	ShowNotImplemented(count int) error
+	// DisplayMutationEstimations displays pre-calculated mutation estimations.
+	DisplayMutationEstimations(estimations map[m.Path]int) error
 }

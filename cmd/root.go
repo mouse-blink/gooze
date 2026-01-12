@@ -12,6 +12,7 @@ import (
 )
 
 var listFlag bool
+var listMutationsFlag bool
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
@@ -32,6 +33,7 @@ Supports Go-style path patterns:
 	}
 
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and their mutation scopes")
+	cmd.Flags().BoolVarP(&listMutationsFlag, "list-mutations-scopes", "s", false, "list all source files and count of mutations applicable")
 
 	return cmd
 }
@@ -60,6 +62,23 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Use factory to create appropriate UI based on TTY detection
 	useTTY := adapter.IsTTY(cmd.OutOrStdout())
 	ui := adapter.NewUI(cmd, useTTY)
+
+	// Handle list-mutations-scopes flag - show mutation counts
+	if listMutationsFlag {
+		// Calculate estimations for all sources
+		estimations := make(map[m.Path]int)
+
+		for _, source := range sources {
+			count, err := wf.EstimateMutations(source, m.MutationArithmetic)
+			if err != nil {
+				return fmt.Errorf("failed to estimate mutations for %s: %w", source.Origin, err)
+			}
+
+			estimations[source.Origin] = count
+		}
+
+		return ui.DisplayMutationEstimations(estimations)
+	}
 
 	// Handle list flag - show sources with UI
 	if listFlag {
