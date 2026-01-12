@@ -20,6 +20,122 @@ func (_m *MockWorkflow) EXPECT() *MockWorkflow_Expecter {
 	return &MockWorkflow_Expecter{mock: &_m.Mock}
 }
 
+// EstimateMutations provides a mock function with given fields: sources, mutationType
+func (_m *MockWorkflow) EstimateMutations(sources model.Source, mutationType model.MutationType) (int, error) {
+	ret := _m.Called(sources, mutationType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EstimateMutations")
+	}
+
+	var r0 int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(model.Source, model.MutationType) (int, error)); ok {
+		return rf(sources, mutationType)
+	}
+	if rf, ok := ret.Get(0).(func(model.Source, model.MutationType) int); ok {
+		r0 = rf(sources, mutationType)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	if rf, ok := ret.Get(1).(func(model.Source, model.MutationType) error); ok {
+		r1 = rf(sources, mutationType)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockWorkflow_EstimateMutations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EstimateMutations'
+type MockWorkflow_EstimateMutations_Call struct {
+	*mock.Call
+}
+
+// EstimateMutations is a helper method to define mock.On call
+//   - sources model.Source
+//   - mutationType model.MutationType
+func (_e *MockWorkflow_Expecter) EstimateMutations(sources interface{}, mutationType interface{}) *MockWorkflow_EstimateMutations_Call {
+	return &MockWorkflow_EstimateMutations_Call{Call: _e.mock.On("EstimateMutations", sources, mutationType)}
+}
+
+func (_c *MockWorkflow_EstimateMutations_Call) Run(run func(sources model.Source, mutationType model.MutationType)) *MockWorkflow_EstimateMutations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(model.Source), args[1].(model.MutationType))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_EstimateMutations_Call) Return(_a0 int, _a1 error) *MockWorkflow_EstimateMutations_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockWorkflow_EstimateMutations_Call) RunAndReturn(run func(model.Source, model.MutationType) (int, error)) *MockWorkflow_EstimateMutations_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GenerateMutations provides a mock function with given fields: sources, mutationType
+func (_m *MockWorkflow) GenerateMutations(sources model.Source, mutationType model.MutationType) ([]model.Mutation, error) {
+	ret := _m.Called(sources, mutationType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GenerateMutations")
+	}
+
+	var r0 []model.Mutation
+	var r1 error
+	if rf, ok := ret.Get(0).(func(model.Source, model.MutationType) ([]model.Mutation, error)); ok {
+		return rf(sources, mutationType)
+	}
+	if rf, ok := ret.Get(0).(func(model.Source, model.MutationType) []model.Mutation); ok {
+		r0 = rf(sources, mutationType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.Mutation)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(model.Source, model.MutationType) error); ok {
+		r1 = rf(sources, mutationType)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockWorkflow_GenerateMutations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GenerateMutations'
+type MockWorkflow_GenerateMutations_Call struct {
+	*mock.Call
+}
+
+// GenerateMutations is a helper method to define mock.On call
+//   - sources model.Source
+//   - mutationType model.MutationType
+func (_e *MockWorkflow_Expecter) GenerateMutations(sources interface{}, mutationType interface{}) *MockWorkflow_GenerateMutations_Call {
+	return &MockWorkflow_GenerateMutations_Call{Call: _e.mock.On("GenerateMutations", sources, mutationType)}
+}
+
+func (_c *MockWorkflow_GenerateMutations_Call) Run(run func(sources model.Source, mutationType model.MutationType)) *MockWorkflow_GenerateMutations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(model.Source), args[1].(model.MutationType))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_GenerateMutations_Call) Return(_a0 []model.Mutation, _a1 error) *MockWorkflow_GenerateMutations_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockWorkflow_GenerateMutations_Call) RunAndReturn(run func(model.Source, model.MutationType) ([]model.Mutation, error)) *MockWorkflow_GenerateMutations_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetSources provides a mock function with given fields: roots
 func (_m *MockWorkflow) GetSources(roots ...model.Path) ([]model.Source, error) {
 	_va := make([]interface{}, len(roots))

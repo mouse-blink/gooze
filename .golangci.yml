@@ -94,6 +94,8 @@ linters-settings:
     threshold: 100
   misspell:
     locale: US
+  cyclop:
+    max-complexity: 10
 
 issues:
   exclude-use-default: false

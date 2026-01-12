@@ -9,7 +9,7 @@ import (
 )
 
 func TestRunRoot_WithMocks(t *testing.T) {
-	t.Run("displays sources when list flag is used", func(t *testing.T) {
+	t.Run("displays mutation estimations when list flag is used", func(t *testing.T) {
 		// Create mocks
 		mockWorkflow := mockDomain.NewMockWorkflow(t)
 		mockUI := mockAdapter.NewMockUI(t)
@@ -20,9 +20,14 @@ func TestRunRoot_WithMocks(t *testing.T) {
 			{Origin: m.Path("helper.go")},
 		}
 
+		estimations := map[m.Path]int{
+			m.Path("main.go"):   5,
+			m.Path("helper.go"): 3,
+		}
+
 		// Mock expectations - using simple On/Return pattern
 		mockWorkflow.On("GetSources", m.Path("./test")).Return(sources, nil)
-		mockUI.On("Display", sources).Return(nil)
+		mockUI.On("DisplayMutationEstimations", estimations).Return(nil)
 
 		// Use mocks
 		gotSources, err := mockWorkflow.GetSources(m.Path("./test"))
@@ -33,7 +38,7 @@ func TestRunRoot_WithMocks(t *testing.T) {
 			t.Errorf("expected 2 sources, got %d", len(gotSources))
 		}
 
-		err = mockUI.Display(sources)
+		err = mockUI.DisplayMutationEstimations(estimations)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -132,23 +137,23 @@ func TestWorkflowMock_GetSources(t *testing.T) {
 }
 
 // Example of testing UI mock
-func TestUIMock_Display(t *testing.T) {
-	t.Run("displays sources successfully", func(t *testing.T) {
+func TestUIMock_DisplayMutationEstimations(t *testing.T) {
+	t.Run("displays mutation estimations successfully", func(t *testing.T) {
 		// Create mock
 		mockUI := mockAdapter.NewMockUI(t)
 
 		// Setup test data
-		sources := []m.Source{
-			{Origin: m.Path("main.go")},
+		estimations := map[m.Path]int{
+			m.Path("main.go"): 5,
 		}
 
 		// Setup expectation
 		mockUI.EXPECT().
-			Display(sources).
+			DisplayMutationEstimations(estimations).
 			Return(nil)
 
 		// Use mock
-		err := mockUI.Display(sources)
+		err := mockUI.DisplayMutationEstimations(estimations)
 
 		// Verify
 		if err != nil {
@@ -174,17 +179,17 @@ func TestUIMock_Display(t *testing.T) {
 		}
 	})
 
-	t.Run("handles empty source list", func(t *testing.T) {
+	t.Run("handles empty estimations", func(t *testing.T) {
 		// Create mock
 		mockUI := mockAdapter.NewMockUI(t)
 
-		// Setup expectation with empty list
+		// Setup expectation with empty map
 		mockUI.EXPECT().
-			Display([]m.Source{}).
+			DisplayMutationEstimations(map[m.Path]int{}).
 			Return(nil)
 
 		// Use mock
-		err := mockUI.Display([]m.Source{})
+		err := mockUI.DisplayMutationEstimations(map[m.Path]int{})
 
 		// Verify
 		if err != nil {

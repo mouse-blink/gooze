@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"go/token"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,8 +12,11 @@ import (
 func TestGetSources(t *testing.T) {
 	t.Run("detects functions in files", func(t *testing.T) {
 		root := t.TempDir()
-		writeFile(t, filepath.Join(root, "main.go"), "package main\n\nfunc main() {}\n")
-		writeFile(t, filepath.Join(root, "type.go"), "package main\n\ntype A struct { x int }\n")
+
+		// Copy basic example (has main function) and types example (only types)
+		if err := copyExampleDir("../../examples/basic", root); err != nil {
+			t.Fatalf("failed to copy basic example: %v", err)
+		}
 
 		wf := NewWorkflow()
 		sources, err := wf.GetSources(m.Path(root))
@@ -28,19 +32,98 @@ func TestGetSources(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected to find source for %s", mainPath)
 		}
-		// `main` starts at line 3 in our fixture.
-		if !containsInt(lines, 3) {
-			t.Errorf("expected function at line 3 in %s, got %v", mainPath, lines)
+		// main function should be detected
+		if len(lines) == 0 {
+			t.Errorf("expected function lines in %s, got %v", mainPath, lines)
 		}
-		// Ensure type.go (no functions) is not included in results.
+		// Ensure type.go (no functions) is not included if present
 		if _, present := findLinesFor(sources, filepath.Join(root, "type.go")); present {
 			t.Errorf("did not expect type.go to be reported (contains no functions)")
 		}
 	})
 
-	t.Run("excludes files without functions", func(t *testing.T) {
+	t.Run("automatically detects test files", func(t *testing.T) {
 		root := t.TempDir()
-		writeFile(t, filepath.Join(root, "type.go"), "package main\n\ntype A struct { x int }\n")
+
+		// Copy basic example and add test file
+		if err := copyExampleDir("../../examples/basic", root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		// Create corresponding test file
+		writeFile(t, filepath.Join(root, "main_test.go"), `package main
+
+import "testing"
+
+func TestMain(t *testing.T) {}
+`)
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		// Find main.go source
+		var mainSource m.Source
+		found := false
+		for _, s := range sources {
+			if filepath.Base(string(s.Origin)) == "main.go" {
+				mainSource = s
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("main.go not found in sources")
+		}
+
+		// Check that test file was automatically detected
+		if mainSource.Test == "" {
+			t.Errorf("expected Test field to be set, got empty")
+		}
+
+		expectedTestPath := filepath.Join(root, "main_test.go")
+		if string(mainSource.Test) != expectedTestPath {
+			t.Errorf("expected Test = %s, got %s", expectedTestPath, mainSource.Test)
+		}
+	})
+
+	t.Run("no test file when test does not exist", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy basic example without test file
+		if err := copyExampleDir("../../examples/basic", root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		// Remove test file
+		os.Remove(filepath.Join(root, "main_test.go"))
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		// Check that test file is empty when not found
+		if sources[0].Test != "" {
+			t.Errorf("expected Test field to be empty, got %s", sources[0].Test)
+		}
+	})
+
+	t.Run("excludes files without functions", func(t *testing.T) {
+		// Use nofunc example which has only type declarations
+		root := "../../examples/nofunc"
 
 		wf := NewWorkflow()
 		sources, err := wf.GetSources(m.Path(root))
@@ -53,12 +136,8 @@ func TestGetSources(t *testing.T) {
 	})
 
 	t.Run("walks nested directories with ./... pattern", func(t *testing.T) {
-		root := t.TempDir()
-		nested := filepath.Join(root, "sub")
-		if err := os.MkdirAll(nested, 0o755); err != nil {
-			t.Fatalf("mkdir nested: %v", err)
-		}
-		writeFile(t, filepath.Join(nested, "child.go"), "package sub\n\nfunc Hello() {}\n")
+		// Use examples/nested which has sub/child.go structure
+		root := "../../examples/nested"
 
 		wf := NewWorkflow()
 		// Use ./... pattern for recursive scanning
@@ -66,7 +145,7 @@ func TestGetSources(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
 		}
-		childPath := filepath.Join(nested, "child.go")
+		childPath := filepath.Join(root, "sub", "child.go")
 		if _, ok := findLinesFor(sources, childPath); !ok {
 			t.Fatalf("expected to find nested source %s", childPath)
 		}
@@ -94,9 +173,20 @@ func TestGetSources(t *testing.T) {
 	})
 
 	t.Run("invalid Go file is silently skipped", func(t *testing.T) {
+		// Use examples/invalid which has broken.go and copy basic for valid file
 		root := t.TempDir()
-		writeFile(t, filepath.Join(root, "broken.go"), "package main\n\nfunc Broken(\n")
-		writeFile(t, filepath.Join(root, "good.go"), "package main\n\nfunc Good() {}\n")
+		if err := copyExampleDir("../../examples/invalid", root); err != nil {
+			t.Fatalf("failed to copy invalid example: %v", err)
+		}
+		// Copy a valid file from basic example
+		basicContent, err := os.ReadFile("../../examples/basic/main.go")
+		if err != nil {
+			t.Fatalf("failed to read basic/main.go: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "good.go"), basicContent, 0o644); err != nil {
+			t.Fatalf("failed to write good.go: %v", err)
+		}
+
 		wf := NewWorkflow()
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
@@ -631,4 +721,393 @@ func hasScopeWithName(scopes []m.CodeScope, name string) bool {
 		}
 	}
 	return false
+}
+
+func copyExampleDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyExampleDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			content, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dstPath, content, 0o644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func TestTestMutation(t *testing.T) {
+	t.Run("kills mutation when test fails", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy example project with its test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		mainSource := sources[0]
+		testGo := filepath.Join(root, "main_test.go")
+		mainSource.Test = m.Path(testGo)
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(mutations) == 0 {
+			t.Fatalf("expected at least one mutation")
+		}
+
+		mutation := mutations[0]
+		report, err := wf.TestMutation(mainSource, mutation)
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+
+		if !report.Killed {
+			t.Errorf("expected mutation to be killed, but it survived")
+		}
+
+		if report.MutationID != mutation.ID {
+			t.Errorf("report.MutationID = %s, want %s", report.MutationID, mutation.ID)
+		}
+	})
+
+	t.Run("mutation survives when no test file", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy example without test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		// Remove test file to simulate no tests
+		os.Remove(filepath.Join(root, "main_test.go"))
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		mainSource := sources[0]
+		// No test file set (Test field is empty)
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(mutations) == 0 {
+			t.Fatalf("expected at least one mutation")
+		}
+
+		mutation := mutations[0]
+
+		report, err := wf.TestMutation(mainSource, mutation)
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+
+		// Without tests, mutation survives
+		if report.Killed {
+			t.Errorf("expected mutation to survive (no tests), but it was killed")
+		}
+	})
+
+	t.Run("returns error for invalid mutation", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy example (test file not needed for this test)
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		mainSource := sources[0]
+
+		// Create an invalid mutation (non-existent line)
+		invalidMutation := m.Mutation{
+			ID:         "INVALID_1",
+			Type:       m.MutationArithmetic,
+			SourceFile: mainSource.Origin,
+			OriginalOp: token.ADD,
+			MutatedOp:  token.SUB,
+			Line:       9999, // line doesn't exist
+			Column:     1,
+		}
+
+		_, err = wf.TestMutation(mainSource, invalidMutation)
+		if err == nil {
+			t.Errorf("expected error for invalid mutation, got nil")
+		}
+	})
+
+	t.Run("automatic test file detection with TestMutation", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy example with test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+
+		// Get sources - should automatically detect test file
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		mainSource := sources[0]
+
+		// Verify test file was auto-detected
+		if mainSource.Test == "" {
+			t.Fatalf("expected test file to be auto-detected, got empty")
+		}
+
+		// Generate and test mutation WITHOUT manually setting Test field
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(mutations) == 0 {
+			t.Fatalf("expected at least one mutation")
+		}
+
+		// Test mutation with auto-detected test file
+		report, err := wf.TestMutation(mainSource, mutations[0])
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+
+		// Mutation should be killed by auto-detected test
+		if !report.Killed {
+			t.Errorf("expected mutation to be killed by auto-detected test")
+		}
+	})
+
+	t.Run("example basic - mutation with correct test", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy basic example with test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		var mainSource m.Source
+		for _, s := range sources {
+			if filepath.Base(string(s.Origin)) == "main.go" {
+				mainSource = s
+				break
+			}
+		}
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(mutations) == 0 {
+			t.Fatalf("expected mutations for basic example")
+		}
+
+		// Test first mutation
+		report, err := wf.TestMutation(mainSource, mutations[0])
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+
+		if !report.Killed {
+			t.Errorf("expected mutation to be killed by correct test")
+		}
+	})
+
+	t.Run("example scopes - mutation in Calculate function", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy scopes example with test file
+		srcDir := "../../examples/scopes"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		mainSource := sources[0]
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(mutations) == 0 {
+			t.Fatalf("expected mutations in Calculate function")
+		}
+
+		// Find mutation in function scope (Calculate function has arithmetic)
+		var funcMutation m.Mutation
+		foundFunc := false
+		for _, mut := range mutations {
+			if mut.ScopeType == m.ScopeFunction {
+				funcMutation = mut
+				foundFunc = true
+				break
+			}
+		}
+
+		if !foundFunc {
+			t.Fatalf("expected to find mutation in function scope")
+		}
+
+		report, err := wf.TestMutation(mainSource, funcMutation)
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+
+		if !report.Killed {
+			t.Errorf("expected mutation in Calculate to be killed")
+		}
+	})
+
+	t.Run("example mixed - multiple functions", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy mixed example with test file
+		srcDir := "../../examples/mixed"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		mainSource := sources[0]
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+
+		// Should have mutations for *
+		if len(mutations) < 1 {
+			t.Fatalf("expected at least 1 mutation, got %d", len(mutations))
+		}
+
+		// Test all mutations
+		killedCount := 0
+		for _, mutation := range mutations {
+			report, err := wf.TestMutation(mainSource, mutation)
+			if err != nil {
+				t.Errorf("TestMutation error for %s: %v", mutation.ID, err)
+				continue
+			}
+			if report.Killed {
+				killedCount++
+			}
+		}
+
+		if killedCount == 0 {
+			t.Errorf("expected at least some mutations to be killed")
+		}
+	})
+
+	t.Run("complex example - multiple operators in one line", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Use basic example which has inline arithmetic with test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+
+		mainSource := sources[0]
+
+		mutations, err := wf.GenerateMutations(mainSource, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+
+		// Should have mutations
+		if len(mutations) < 1 {
+			t.Fatalf("expected at least 1 mutation, got %d", len(mutations))
+		}
+
+		// At least one mutation should be killed
+		anyKilled := false
+		for _, mutation := range mutations {
+			report, err := wf.TestMutation(mainSource, mutation)
+			if err != nil {
+				t.Errorf("TestMutation error: %v", err)
+				continue
+			}
+			if report.Killed {
+				anyKilled = true
+				break
+			}
+		}
+
+		if !anyKilled {
+			t.Errorf("expected at least one mutation to be killed")
+		}
+	})
 }

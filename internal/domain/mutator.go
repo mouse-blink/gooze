@@ -1,3 +1,4 @@
+// Package domain provides core business logic for mutation testing operations.
 package domain
 
 import (
@@ -10,7 +11,12 @@ import (
 )
 
 // GenerateMutations analyzes a source file and generates all arithmetic mutations.
-func (w *workflow) GenerateMutations(source m.Source) ([]m.Mutation, error) {
+func (w *workflow) GenerateMutations(sources m.Source, mutationType m.MutationType) ([]m.Mutation, error) {
+	if mutationType != m.MutationArithmetic {
+		return nil, fmt.Errorf("unsupported mutation type: %v", mutationType)
+	}
+
+	source := sources
 	// Parse the source file
 	fset := token.NewFileSet()
 

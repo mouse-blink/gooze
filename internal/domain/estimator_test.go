@@ -83,7 +83,7 @@ func TestEstimateMutations(t *testing.T) {
 		}
 
 		// Generate actual mutations
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}

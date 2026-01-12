@@ -15,7 +15,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, basicPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -58,7 +58,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, scopesPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -90,7 +90,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, scopesPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -113,7 +113,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, emptyPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -128,7 +128,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, basicPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -148,7 +148,7 @@ func TestGenerateMutations(t *testing.T) {
 		source := loadSourceFromFile(t, basicPath)
 
 		wf := NewWorkflow()
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}

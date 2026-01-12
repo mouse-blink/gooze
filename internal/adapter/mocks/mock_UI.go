@@ -20,17 +20,17 @@ func (_m *MockUI) EXPECT() *MockUI_Expecter {
 	return &MockUI_Expecter{mock: &_m.Mock}
 }
 
-// Display provides a mock function with given fields: sources
-func (_m *MockUI) Display(sources []model.Source) error {
-	ret := _m.Called(sources)
+// DisplayMutationEstimations provides a mock function with given fields: estimations
+func (_m *MockUI) DisplayMutationEstimations(estimations map[model.Path]int) error {
+	ret := _m.Called(estimations)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Display")
+		panic("no return value specified for DisplayMutationEstimations")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]model.Source) error); ok {
-		r0 = rf(sources)
+	if rf, ok := ret.Get(0).(func(map[model.Path]int) error); ok {
+		r0 = rf(estimations)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -38,30 +38,30 @@ func (_m *MockUI) Display(sources []model.Source) error {
 	return r0
 }
 
-// MockUI_Display_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Display'
-type MockUI_Display_Call struct {
+// MockUI_DisplayMutationEstimations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayMutationEstimations'
+type MockUI_DisplayMutationEstimations_Call struct {
 	*mock.Call
 }
 
-// Display is a helper method to define mock.On call
-//   - sources []model.Source
-func (_e *MockUI_Expecter) Display(sources interface{}) *MockUI_Display_Call {
-	return &MockUI_Display_Call{Call: _e.mock.On("Display", sources)}
+// DisplayMutationEstimations is a helper method to define mock.On call
+//   - estimations map[model.Path]int
+func (_e *MockUI_Expecter) DisplayMutationEstimations(estimations interface{}) *MockUI_DisplayMutationEstimations_Call {
+	return &MockUI_DisplayMutationEstimations_Call{Call: _e.mock.On("DisplayMutationEstimations", estimations)}
 }
 
-func (_c *MockUI_Display_Call) Run(run func(sources []model.Source)) *MockUI_Display_Call {
+func (_c *MockUI_DisplayMutationEstimations_Call) Run(run func(estimations map[model.Path]int)) *MockUI_DisplayMutationEstimations_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]model.Source))
+		run(args[0].(map[model.Path]int))
 	})
 	return _c
 }
 
-func (_c *MockUI_Display_Call) Return(_a0 error) *MockUI_Display_Call {
+func (_c *MockUI_DisplayMutationEstimations_Call) Return(_a0 error) *MockUI_DisplayMutationEstimations_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockUI_Display_Call) RunAndReturn(run func([]model.Source) error) *MockUI_Display_Call {
+func (_c *MockUI_DisplayMutationEstimations_Call) RunAndReturn(run func(map[model.Path]int) error) *MockUI_DisplayMutationEstimations_Call {
 	_c.Call.Return(run)
 	return _c
 }
