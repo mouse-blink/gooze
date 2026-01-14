@@ -8,3 +8,9 @@ type Report struct {
 	Output     string // test output/error message
 	Error      error  // error executing test (not test failure)
 }
+
+// FileResult holds the mutation testing results for a single source file.
+type FileResult struct {
+	Source  Source
+	Reports []Report
+}

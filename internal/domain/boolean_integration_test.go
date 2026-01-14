@@ -40,10 +40,28 @@ func TestBooleanMutationIntegration(t *testing.T) {
 			t.Fatal("could not find a true->false mutation")
 		}
 
-		// Test the mutation
-		report, err := wf.TestMutation(source, *testMutation)
+		// Test the mutation using RunMutationTests
+		results, err := wf.RunMutationTests([]m.Source{source}, 1)
 		if err != nil {
-			t.Fatalf("TestMutation failed: %v", err)
+			t.Fatalf("RunMutationTests failed: %v", err)
+		}
+
+		fileResult, ok := results[source.Origin]
+		if !ok {
+			t.Fatal("no results for source")
+		}
+
+		// Find the report for our test mutation
+		var report *m.Report
+		for i := range fileResult.Reports {
+			if fileResult.Reports[i].MutationID == testMutation.ID {
+				report = &fileResult.Reports[i]
+				break
+			}
+		}
+
+		if report == nil {
+			t.Fatalf("no report found for mutation %s", testMutation.ID)
 		}
 
 		// The test should kill the mutation (detect the change)

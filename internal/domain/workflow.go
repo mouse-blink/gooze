@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
 	m "github.com/mouse-blink/gooze/internal/model"
@@ -17,25 +18,23 @@ type Workflow interface {
 	GetSources(roots ...m.Path) ([]m.Source, error)
 	GenerateMutations(sources m.Source, mutationType ...m.MutationType) ([]m.Mutation, error)
 	EstimateMutations(sources m.Source, mutationType ...m.MutationType) (int, error)
-	TestMutation(sources m.Source, mutation m.Mutation) (m.Report, error)
+	RunMutationTests(sources []m.Source, threads int) (map[m.Path]m.FileResult, error)
 }
 
 type workflow struct {
-	fsAdapter   adapter.SourceFSAdapter
-	goAdapter   adapter.GoFileAdapter
-	testAdapter adapter.TestRunnerAdapter
-	mutagen     Mutagen
-	orch        Orchestrator
+	fsAdapter adapter.SourceFSAdapter
+	goAdapter adapter.GoFileAdapter
+	mutagen   Mutagen
+	orch      Orchestrator
 }
 
 // NewWorkflow creates a new Workflow instance with the provided adapters.
 func NewWorkflow(fsAdapter adapter.SourceFSAdapter, goAdapter adapter.GoFileAdapter, testAdapter adapter.TestRunnerAdapter) Workflow {
 	return &workflow{
-		fsAdapter:   fsAdapter,
-		goAdapter:   goAdapter,
-		testAdapter: testAdapter,
-		mutagen:     NewMutagen(),
-		orch:        NewOrchestrator(fsAdapter, testAdapter),
+		fsAdapter: fsAdapter,
+		goAdapter: goAdapter,
+		mutagen:   NewMutagen(),
+		orch:      NewOrchestrator(fsAdapter, testAdapter),
 	}
 }
 
@@ -81,6 +80,106 @@ func (w *workflow) GenerateMutations(source m.Source, mutationTypes ...m.Mutatio
 // EstimateMutations delegates to the mutagen for mutation estimation.
 func (w *workflow) EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error) {
 	return w.mutagen.EstimateMutations(source, mutationTypes...)
+}
+
+// RunMutationTests executes mutation testing on all provided sources.
+func (w *workflow) RunMutationTests(sources []m.Source, threads int) (map[m.Path]m.FileResult, error) {
+	if threads <= 0 {
+		threads = 1
+	}
+
+	results := make(map[m.Path]m.FileResult)
+
+	// Initialize all sources with empty results
+	for _, source := range sources {
+		results[source.Origin] = m.FileResult{
+			Source:  source,
+			Reports: []m.Report{},
+		}
+	}
+
+	jobs := make(chan m.Source, len(sources))
+	resultsChan := make(chan sourceResult, len(sources))
+
+	var wg sync.WaitGroup
+
+	// Start worker pool
+	for range threads {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			w.processSourceWorker(jobs, resultsChan)
+		}()
+	}
+
+	// Send jobs to workers
+	for _, src := range sources {
+		jobs <- src
+	}
+
+	close(jobs)
+
+	// Wait for all workers to complete
+	wg.Wait()
+	close(resultsChan)
+
+	// Collect results
+	for res := range resultsChan {
+		if res.err != nil {
+			return nil, res.err
+		}
+
+		fr := results[res.origin]
+		fr.Reports = append(fr.Reports, res.reports...)
+		results[res.origin] = fr
+	}
+
+	return results, nil
+}
+
+// sourceResult holds the result of processing a single source file.
+type sourceResult struct {
+	origin  m.Path
+	reports []m.Report
+	err     error
+}
+
+// processSourceWorker processes sources from the jobs channel and sends results to resultsChan.
+func (w *workflow) processSourceWorker(jobs <-chan m.Source, resultsChan chan<- sourceResult) {
+	for source := range jobs {
+		mutations, err := w.GenerateMutations(source)
+		if err != nil {
+			resultsChan <- sourceResult{
+				origin: source.Origin,
+				err:    fmt.Errorf("failed to generate mutations for %s: %w", source.Origin, err),
+			}
+
+			continue
+		}
+
+		reports := make([]m.Report, 0, len(mutations))
+
+		for _, mutation := range mutations {
+			report, err := w.orch.TestMutation(source, mutation)
+			if err != nil {
+				resultsChan <- sourceResult{
+					origin: source.Origin,
+					err:    fmt.Errorf("failed to test mutation %s: %w", mutation.ID, err),
+				}
+
+				continue
+			}
+
+			reports = append(reports, report)
+		}
+
+		resultsChan <- sourceResult{
+			origin:  source.Origin,
+			reports: reports,
+		}
+	}
 }
 
 // scanPath scans a single path (with optional /... suffix) for Go source files.
@@ -200,9 +299,4 @@ func hasGlobalScopes(scopes []m.CodeScope) bool {
 	}
 
 	return false
-}
-
-// TestMutation applies a mutation to source code and runs tests to check if the mutation is detected.
-func (w *workflow) TestMutation(source m.Source, mutation m.Mutation) (m.Report, error) {
-	return w.orch.TestMutation(source, mutation)
 }

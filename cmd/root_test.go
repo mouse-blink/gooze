@@ -160,9 +160,9 @@ func TestDefaultCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("runs mutations on current directory by default", func(t *testing.T) {
+	t.Run("runs mutations on small example directory", func(t *testing.T) {
 		cmd := newRootCmd()
-		cmd.SetArgs([]string{}) // No args = current directory
+		cmd.SetArgs([]string{"../examples/basic"}) // Use small example instead of current directory
 
 		var out bytes.Buffer
 		cmd.SetOut(&out)
@@ -174,9 +174,7 @@ func TestDefaultCommand(t *testing.T) {
 
 		select {
 		case err := <-done:
-			// When running from cmd directory, it may fail to find go.mod for mutation testing
-			// This is expected behavior, so we just check that something was attempted
-			if err != nil && !strings.Contains(err.Error(), "go.mod not found") {
+			if err != nil {
 				t.Fatalf("Execute error: %v", err)
 			}
 		case <-time.After(30 * time.Second):

@@ -12,6 +12,7 @@ import (
 )
 
 var listFlag bool
+var parallelFlag int
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
@@ -32,6 +33,7 @@ Supports Go-style path patterns:
 	}
 
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
+	cmd.Flags().IntVarP(&parallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
 
 	return cmd
 }
@@ -92,55 +94,27 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Default behavior: run mutation testing
-	return runMutationTests(wf, ui, sources)
+	return runMutationTests(wf, ui, sources, parallelFlag)
 }
 
 // runMutationTests executes mutation testing on all sources.
-func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source) error {
+func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source, threads int) error {
 	if len(sources) == 0 {
 		return ui.ShowNotImplemented(0)
 	}
 
-	// Create a map to track reports per source file
-	type FileResult struct {
-		Source  m.Source
-		Reports []m.Report
+	// Delegate core mutation test execution to the workflow.
+	results, err := wf.RunMutationTests(sources, threads)
+	if err != nil {
+		return err
 	}
 
-	fileResults := make(map[m.Path]interface{})
-
-	// Initialize all sources with empty reports
-	for _, source := range sources {
-		fileResults[source.Origin] = &FileResult{
-			Source:  source,
-			Reports: []m.Report{},
-		}
+	// Adapt results to the UI's expected map type.
+	fileResults := make(map[m.Path]interface{}, len(results))
+	for path, res := range results {
+		fileResults[path] = res
 	}
 
-	for _, source := range sources {
-		// Generate all mutations for this source (both arithmetic and boolean)
-		mutations, err := wf.GenerateMutations(source) // No type specified = all types
-		if err != nil {
-			return fmt.Errorf("failed to generate mutations for %s: %w", source.Origin, err)
-		}
-
-		// Test each mutation
-		for _, mutation := range mutations {
-			report, err := wf.TestMutation(source, mutation)
-			if err != nil {
-				return fmt.Errorf("failed to test mutation %s: %w", mutation.ID, err)
-			}
-
-			value, ok := fileResults[source.Origin].(*FileResult)
-			if !ok {
-				return fmt.Errorf("unexpected file result type for %s", source.Origin)
-			}
-
-			value.Reports = append(value.Reports, report)
-		}
-	}
-
-	// Display results
 	return ui.DisplayMutationResults(sources, fileResults)
 }
 
