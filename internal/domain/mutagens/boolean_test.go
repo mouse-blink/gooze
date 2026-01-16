@@ -28,7 +28,7 @@ func TestGenerateBooleanMutations(t *testing.T) {
 
 	source := m.SourceV2{Origin: &m.File{Path: m.Path(booleanPath)}}
 	mutationID := 5
-	var mutations []m.MutationV2
+	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		mutations = append(mutations, GenerateBooleanMutations(n, fset, content, source, &mutationID)...)

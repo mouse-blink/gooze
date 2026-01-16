@@ -13,7 +13,7 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
-	GenerateMutation(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.MutationV2, error)
+	GenerateMutation(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.Mutation, error)
 }
 
 // mutagen handles pure mutation generation logic.
@@ -30,7 +30,7 @@ func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.Sou
 	}
 }
 
-func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.MutationV2, error) {
+func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
 	if source.Origin == nil || source.Origin.Path == "" {
 		return nil, fmt.Errorf("missing source origin")
 	}
@@ -60,7 +60,7 @@ func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutati
 		return nil, fmt.Errorf("failed to parse %s: %w", source.Origin.Path, err)
 	}
 
-	var mutations []m.MutationV2
+	var mutations []m.Mutation
 	mutationID := startingIndex
 
 	for _, mutationType := range mutationTypes {

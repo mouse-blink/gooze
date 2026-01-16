@@ -93,7 +93,7 @@ func (w *workflow) Test(args TestArgs) error {
 	return nil
 }
 
-func (w *workflow) GetMutations(paths []m.Path) ([]m.MutationV2, error) {
+func (w *workflow) GetMutations(paths []m.Path) ([]m.Mutation, error) {
 	sources, err := w.Get(paths)
 	if err != nil {
 		return nil, fmt.Errorf("get sources: %w", err)
@@ -115,10 +115,10 @@ func (w *workflow) GetChangedSources(sources []m.SourceV2) ([]m.SourceV2, error)
 	return sources, nil
 }
 
-func (w *workflow) GenerateAllMutations(sources []m.SourceV2) ([]m.MutationV2, error) {
+func (w *workflow) GenerateAllMutations(sources []m.SourceV2) ([]m.Mutation, error) {
 	mutationsIndex := 0
 
-	var allMutations []m.MutationV2
+	var allMutations []m.Mutation
 
 	for _, source := range sources {
 		mutations, err := w.GenerateMutation(source, mutationsIndex, DefaultMutations...)
@@ -133,12 +133,12 @@ func (w *workflow) GenerateAllMutations(sources []m.SourceV2) ([]m.MutationV2, e
 	return allMutations, nil
 }
 
-func (w *workflow) ShardMutations(allMutations []m.MutationV2, shardIndex uint, totalShardCount uint) []m.MutationV2 {
+func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex uint, totalShardCount uint) []m.Mutation {
 	if totalShardCount == 0 {
 		return allMutations
 	}
 
-	var shardMutations []m.MutationV2
+	var shardMutations []m.Mutation
 
 	for _, mutation := range allMutations {
 		if mutation.ID%totalShardCount == shardIndex {
@@ -149,7 +149,7 @@ func (w *workflow) ShardMutations(allMutations []m.MutationV2, shardIndex uint, 
 	return shardMutations
 }
 
-func (w *workflow) TestReports(allMutations []m.MutationV2, threads uint) ([]m.ReportV2, error) {
+func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.ReportV2, error) {
 	reports := []m.ReportV2{}
 	errors := []error{}
 
@@ -167,7 +167,7 @@ func (w *workflow) TestReports(allMutations []m.MutationV2, threads uint) ([]m.R
 		currentMutation := mutation
 
 		group.Go(func() error {
-			mutationResult, err := w.TestMutationV2(currentMutation)
+			mutationResult, err := w.TestMutation(currentMutation)
 			if err != nil {
 				errorsMutex.Lock()
 

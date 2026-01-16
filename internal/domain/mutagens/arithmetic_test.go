@@ -28,7 +28,7 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 
 	source := m.SourceV2{Origin: &m.File{Path: m.Path(basicPath)}}
 	mutationID := 0
-	var mutations []m.MutationV2
+	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		mutations = append(mutations, GenerateArithmeticMutations(n, fset, content, source, &mutationID)...)

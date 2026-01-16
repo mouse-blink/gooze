@@ -21,7 +21,7 @@ func (_m *MockMutagen) EXPECT() *MockMutagen_Expecter {
 }
 
 // GenerateMutation provides a mock function with given fields: source, startingIndex, mutationTypes
-func (_m *MockMutagen) GenerateMutation(source model.SourceV2, startingIndex int, mutationTypes ...model.MutationType) ([]model.MutationV2, error) {
+func (_m *MockMutagen) GenerateMutation(source model.SourceV2, startingIndex int, mutationTypes ...model.MutationType) ([]model.Mutation, error) {
 	_va := make([]interface{}, len(mutationTypes))
 	for _i := range mutationTypes {
 		_va[_i] = mutationTypes[_i]
@@ -35,16 +35,16 @@ func (_m *MockMutagen) GenerateMutation(source model.SourceV2, startingIndex int
 		panic("no return value specified for GenerateMutation")
 	}
 
-	var r0 []model.MutationV2
+	var r0 []model.Mutation
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.SourceV2, int, ...model.MutationType) ([]model.MutationV2, error)); ok {
+	if rf, ok := ret.Get(0).(func(model.SourceV2, int, ...model.MutationType) ([]model.Mutation, error)); ok {
 		return rf(source, startingIndex, mutationTypes...)
 	}
-	if rf, ok := ret.Get(0).(func(model.SourceV2, int, ...model.MutationType) []model.MutationV2); ok {
+	if rf, ok := ret.Get(0).(func(model.SourceV2, int, ...model.MutationType) []model.Mutation); ok {
 		r0 = rf(source, startingIndex, mutationTypes...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]model.MutationV2)
+			r0 = ret.Get(0).([]model.Mutation)
 		}
 	}
 
@@ -84,12 +84,12 @@ func (_c *MockMutagen_GenerateMutation_Call) Run(run func(source model.SourceV2,
 	return _c
 }
 
-func (_c *MockMutagen_GenerateMutation_Call) Return(_a0 []model.MutationV2, _a1 error) *MockMutagen_GenerateMutation_Call {
+func (_c *MockMutagen_GenerateMutation_Call) Return(_a0 []model.Mutation, _a1 error) *MockMutagen_GenerateMutation_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(model.SourceV2, int, ...model.MutationType) ([]model.MutationV2, error)) *MockMutagen_GenerateMutation_Call {
+func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(model.SourceV2, int, ...model.MutationType) ([]model.Mutation, error)) *MockMutagen_GenerateMutation_Call {
 	_c.Call.Return(run)
 	return _c
 }

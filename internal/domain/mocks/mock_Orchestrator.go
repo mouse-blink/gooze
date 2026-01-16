@@ -20,27 +20,29 @@ func (_m *MockOrchestrator) EXPECT() *MockOrchestrator_Expecter {
 	return &MockOrchestrator_Expecter{mock: &_m.Mock}
 }
 
-// TestMutation provides a mock function with given fields: source, mutation
-func (_m *MockOrchestrator) TestMutation(source model.Source, mutation model.Mutation) (model.Report, error) {
-	ret := _m.Called(source, mutation)
+// TestMutation provides a mock function with given fields: mutation
+func (_m *MockOrchestrator) TestMutation(mutation model.Mutation) (model.Result, error) {
+	ret := _m.Called(mutation)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TestMutation")
 	}
 
-	var r0 model.Report
+	var r0 model.Result
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Source, model.Mutation) (model.Report, error)); ok {
-		return rf(source, mutation)
+	if rf, ok := ret.Get(0).(func(model.Mutation) (model.Result, error)); ok {
+		return rf(mutation)
 	}
-	if rf, ok := ret.Get(0).(func(model.Source, model.Mutation) model.Report); ok {
-		r0 = rf(source, mutation)
+	if rf, ok := ret.Get(0).(func(model.Mutation) model.Result); ok {
+		r0 = rf(mutation)
 	} else {
-		r0 = ret.Get(0).(model.Report)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(model.Result)
+		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Source, model.Mutation) error); ok {
-		r1 = rf(source, mutation)
+	if rf, ok := ret.Get(1).(func(model.Mutation) error); ok {
+		r1 = rf(mutation)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -54,83 +56,24 @@ type MockOrchestrator_TestMutation_Call struct {
 }
 
 // TestMutation is a helper method to define mock.On call
-//   - source model.Source
-//   - mutation model.Mutation
-func (_e *MockOrchestrator_Expecter) TestMutation(source interface{}, mutation interface{}) *MockOrchestrator_TestMutation_Call {
-	return &MockOrchestrator_TestMutation_Call{Call: _e.mock.On("TestMutation", source, mutation)}
-}
-
-func (_c *MockOrchestrator_TestMutation_Call) Run(run func(source model.Source, mutation model.Mutation)) *MockOrchestrator_TestMutation_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Source), args[1].(model.Mutation))
-	})
-	return _c
-}
-
-func (_c *MockOrchestrator_TestMutation_Call) Return(_a0 model.Report, _a1 error) *MockOrchestrator_TestMutation_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockOrchestrator_TestMutation_Call) RunAndReturn(run func(model.Source, model.Mutation) (model.Report, error)) *MockOrchestrator_TestMutation_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// TestMutationV2 provides a mock function with given fields: mutation
-func (_m *MockOrchestrator) TestMutationV2(mutation model.MutationV2) (model.Result, error) {
-	ret := _m.Called(mutation)
-
-	if len(ret) == 0 {
-		panic("no return value specified for TestMutationV2")
-	}
-
-	var r0 model.Result
-	var r1 error
-	if rf, ok := ret.Get(0).(func(model.MutationV2) (model.Result, error)); ok {
-		return rf(mutation)
-	}
-	if rf, ok := ret.Get(0).(func(model.MutationV2) model.Result); ok {
-		r0 = rf(mutation)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(model.Result)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(model.MutationV2) error); ok {
-		r1 = rf(mutation)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockOrchestrator_TestMutationV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TestMutationV2'
-type MockOrchestrator_TestMutationV2_Call struct {
-	*mock.Call
-}
-
-// TestMutationV2 is a helper method to define mock.On call
 //   - mutation model.MutationV2
-func (_e *MockOrchestrator_Expecter) TestMutationV2(mutation interface{}) *MockOrchestrator_TestMutationV2_Call {
-	return &MockOrchestrator_TestMutationV2_Call{Call: _e.mock.On("TestMutationV2", mutation)}
+func (_e *MockOrchestrator_Expecter) TestMutation(mutation interface{}) *MockOrchestrator_TestMutation_Call {
+	return &MockOrchestrator_TestMutation_Call{Call: _e.mock.On("TestMutation", mutation)}
 }
 
-func (_c *MockOrchestrator_TestMutationV2_Call) Run(run func(mutation model.MutationV2)) *MockOrchestrator_TestMutationV2_Call {
+func (_c *MockOrchestrator_TestMutation_Call) Run(run func(mutation model.Mutation)) *MockOrchestrator_TestMutation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.MutationV2))
+		run(args[0].(model.Mutation))
 	})
 	return _c
 }
 
-func (_c *MockOrchestrator_TestMutationV2_Call) Return(_a0 model.Result, _a1 error) *MockOrchestrator_TestMutationV2_Call {
+func (_c *MockOrchestrator_TestMutation_Call) Return(_a0 model.Result, _a1 error) *MockOrchestrator_TestMutation_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockOrchestrator_TestMutationV2_Call) RunAndReturn(run func(model.MutationV2) (model.Result, error)) *MockOrchestrator_TestMutationV2_Call {
+func (_c *MockOrchestrator_TestMutation_Call) RunAndReturn(run func(model.Mutation) (model.Result, error)) *MockOrchestrator_TestMutation_Call {
 	_c.Call.Return(run)
 	return _c
 }
