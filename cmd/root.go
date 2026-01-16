@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
+	"github.com/mouse-blink/gooze/internal/controller"
 	"github.com/mouse-blink/gooze/internal/domain"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
@@ -19,8 +20,10 @@ var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
 var workflow domain.Workflow
+var ui controller.UI
 
 func init() {
+	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
 	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
 	reportStore = adapter.NewReportStore()
@@ -31,6 +34,7 @@ func init() {
 	workflow = domain.NewWorkflow(
 		soirceFSAdapter,
 		reportStore,
+		ui,
 		orchestrator,
 		mutagen,
 	)

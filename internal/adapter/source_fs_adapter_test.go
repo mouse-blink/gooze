@@ -331,6 +331,27 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		assertSourceV2(t, nestedSource, nestedPath, nestedContent, "sub", "", nil)
 	})
 
+	t.Run("explicit nested path includes child file", func(t *testing.T) {
+		root := t.TempDir()
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		childPath := filepath.Join(nestedDir, "child.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), childPath)
+		childContent := readFileBytes(t, childPath)
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(root))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		sources, err := adapter.Get([]m.Path{"./nested/..."})
+		require.NoError(t, err)
+
+		childSource := findSourceV2ByOrigin(sources, childPath)
+		require.NotNil(t, childSource, "Get() did not include nested child for ./nested/...")
+		assertSourceV2(t, childSource, childPath, childContent, "sub", "", nil)
+	})
+
 	t.Run("returns error for missing root", func(t *testing.T) {
 		_, err := adapter.Get([]m.Path{"/path/does/not/exist"})
 		assert.Error(t, err)

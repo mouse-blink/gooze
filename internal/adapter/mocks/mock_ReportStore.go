@@ -103,7 +103,7 @@ type MockReportStore_SaveReports_Call struct {
 
 // SaveReports is a helper method to define mock.On call
 //   - path model.Path
-//   - reports []model.ReportV2
+//   - reports []model.Report
 func (_e *MockReportStore_Expecter) SaveReports(path interface{}, reports interface{}) *MockReportStore_SaveReports_Call {
 	return &MockReportStore_SaveReports_Call{Call: _e.mock.On("SaveReports", path, reports)}
 }

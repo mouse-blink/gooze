@@ -63,7 +63,7 @@ type MockMutagen_GenerateMutation_Call struct {
 }
 
 // GenerateMutation is a helper method to define mock.On call
-//   - source model.SourceV2
+//   - source model.Source
 //   - startingIndex int
 //   - mutationTypes ...model.MutationType
 func (_e *MockMutagen_Expecter) GenerateMutation(source interface{}, startingIndex interface{}, mutationTypes ...interface{}) *MockMutagen_GenerateMutation_Call {

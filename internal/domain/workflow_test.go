@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	adaptermocks "github.com/mouse-blink/gooze/internal/adapter/mocks"
+	controllermocks "github.com/mouse-blink/gooze/internal/controller/mocks"
 	domain "github.com/mouse-blink/gooze/internal/domain"
 	domainmocks "github.com/mouse-blink/gooze/internal/domain/mocks"
 	m "github.com/mouse-blink/gooze/internal/model"
@@ -17,6 +18,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -36,7 +38,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -62,13 +64,14 @@ func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	testErr := errors.New("failed to get sources")
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(nil, testErr)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -88,6 +91,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -99,7 +103,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(nil, testErr)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -119,6 +123,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -135,7 +140,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(nil, testErr)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -158,6 +163,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -176,7 +182,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	saveErr := errors.New("failed to save reports")
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(saveErr)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -199,6 +205,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -213,7 +220,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 		return len(reports) == 0
 	})).Return(nil)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -238,6 +245,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -258,7 +266,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 		return len(reports) == 3
 	})).Return(nil)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -281,6 +289,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -306,7 +315,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 		return len(reports) == 2
 	})).Return(nil)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -329,6 +338,7 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
@@ -355,7 +365,7 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 		return len(reports) == 3
 	})).Return(nil)
 
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := domain.TestArgs{
@@ -379,11 +389,12 @@ func TestWorkflow_NewWorkflowV2(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	// Act
-	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
 	// Assert
 	require.NotNil(t, wf)

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
+	"github.com/mouse-blink/gooze/internal/controller"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"golang.org/x/sync/errgroup"
 )
@@ -37,6 +38,7 @@ type Workflow interface {
 type workflow struct {
 	adapter.ReportStore
 	adapter.SourceFSAdapter
+	controller.UI
 	Orchestrator
 	Mutagen
 }
@@ -45,25 +47,33 @@ type workflow struct {
 func NewWorkflow(
 	fsAdapter adapter.SourceFSAdapter,
 	reportStore adapter.ReportStore,
+	ui controller.UI,
 	orchestrator Orchestrator,
 	mutagen Mutagen,
 ) Workflow {
 	return &workflow{
 		SourceFSAdapter: fsAdapter,
 		ReportStore:     reportStore,
+		UI:              ui,
 		Orchestrator:    orchestrator,
 		Mutagen:         mutagen,
 	}
 }
 
 func (w *workflow) Estimate(args EstimateArgs) error {
+	if err := w.Start(); err != nil {
+		return err
+	}
+	defer w.Close()
+
 	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
 		return fmt.Errorf("generate mutations: %w", err)
 	}
 
-	for _, mutation := range allMutations {
-		fmt.Printf("Mutation ID: %d, Type: %v, Source: %s\n", mutation.ID, mutation.Type, mutation.Source.Origin.Path)
+	err = w.DisplayEstimation(allMutations, nil)
+	if err != nil {
+		return fmt.Errorf("display: %w", err)
 	}
 
 	return nil

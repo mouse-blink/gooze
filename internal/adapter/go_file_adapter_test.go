@@ -1,35 +1,25 @@
 package adapter
 
 import (
+	"path/filepath"
 	"testing"
 
 	"go/token"
 )
 
-const sampleSource = `package sample
-
-const flag = true
-var number = 1
-
-func init() {
-}
-
-func add(a int) int {
-    return a + 1
-}
-`
-
 func TestLocalGoFileAdapter_Parse(t *testing.T) {
 	adapter := NewLocalGoFileAdapter()
 	fset := token.NewFileSet()
 
-	file, err := adapter.Parse(fset, "sample.go", []byte(sampleSource))
+	exampleFile := filepath.Join(examplePath(t, "basic"), "main.go")
+	content := readFileBytes(t, exampleFile)
+	file, err := adapter.Parse(fset, exampleFile, content)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
-	if file.Name.Name != "sample" {
-		t.Fatalf("Parse() package = %s, want sample", file.Name.Name)
+	if file.Name.Name != "main" {
+		t.Fatalf("Parse() package = %s, want main", file.Name.Name)
 	}
 }
 
