@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
@@ -15,7 +16,7 @@ var reportStore adapter.ReportStore
 var fsAdapter adapter.SourceFSAdapter
 var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
-var workflow domain.WorkflowV2
+var workflow domain.Workflow
 
 func init() {
 	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
@@ -23,7 +24,7 @@ func init() {
 	fsAdapter = adapter.NewLocalSourceFSAdapter()
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
 	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
-	workflow = domain.NewWorkflowV2(
+	workflow = domain.NewWorkflow(
 		soirceFSAdapter,
 		reportStore,
 		orchestrator,
@@ -33,6 +34,7 @@ func init() {
 
 var listFlag bool
 var parallelFlag int
+var shardFlag string
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
@@ -50,27 +52,32 @@ Supports Go-style path patterns:
   - ./pkg/...      recursively scan pkg directory
   - ./cmd ./pkg    scan multiple directories`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			shardIndex, totalShards := parseShardFlag(shardFlag)
+
 			var paths []m.Path
 			for _, arg := range args {
 				paths = append(paths, m.Path(arg))
 			}
 
 			estimateArgs := domain.EstimateArgs{
-							Paths:    paths,
-							UseCache: listFlag,
-						}
+				Paths:    paths,
+				UseCache: listFlag,
+			}
 			if listFlag {
 				return workflow.Estimate(estimateArgs)
 			}
 			return workflow.Test(domain.TestArgs{
-				EstimateArgs: estimateArgs,
-				Reports: ".gooze-reports",
-				Threads: uint(parallelFlag),
+				EstimateArgs:    estimateArgs,
+				Reports:         ".gooze-reports",
+				Threads:         uint(parallelFlag),
+				ShardIndex:      shardIndex,
+				TotalShardCount: totalShards,
 			})
 		},
 	}
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
 	cmd.Flags().IntVarP(&parallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
+	cmd.Flags().StringVarP(&shardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 	return cmd
 }
 
@@ -81,4 +88,16 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func parseShardFlag(shard string) (uint, uint) {
+	if shard == "" {
+		return 0, 1
+	}
+	var index, total uint
+	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
+	if err != nil || total == 0 || index >= total {
+		return 0, 1
+	}
+	return index, total
 }

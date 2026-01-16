@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	model "github.com/mouse-blink/gooze/internal/model"
+	domain "github.com/mouse-blink/gooze/internal/domain"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -20,276 +20,94 @@ func (_m *MockWorkflow) EXPECT() *MockWorkflow_Expecter {
 	return &MockWorkflow_Expecter{mock: &_m.Mock}
 }
 
-// EstimateMutations provides a mock function with given fields: sources, mutationType
-func (_m *MockWorkflow) EstimateMutations(sources model.Source, mutationType ...model.MutationType) (int, error) {
-	_va := make([]interface{}, len(mutationType))
-	for _i := range mutationType {
-		_va[_i] = mutationType[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, sources)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+// Estimate provides a mock function with given fields: args
+func (_m *MockWorkflow) Estimate(args domain.EstimateArgs) error {
+	ret := _m.Called(args)
 
 	if len(ret) == 0 {
-		panic("no return value specified for EstimateMutations")
+		panic("no return value specified for Estimate")
 	}
 
-	var r0 int
-	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) (int, error)); ok {
-		return rf(sources, mutationType...)
-	}
-	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) int); ok {
-		r0 = rf(sources, mutationType...)
+	var r0 error
+	if rf, ok := ret.Get(0).(func(domain.EstimateArgs) error); ok {
+		r0 = rf(args)
 	} else {
-		r0 = ret.Get(0).(int)
+		r0 = ret.Error(0)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Source, ...model.MutationType) error); ok {
-		r1 = rf(sources, mutationType...)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
-// MockWorkflow_EstimateMutations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EstimateMutations'
-type MockWorkflow_EstimateMutations_Call struct {
+// MockWorkflow_Estimate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Estimate'
+type MockWorkflow_Estimate_Call struct {
 	*mock.Call
 }
 
-// EstimateMutations is a helper method to define mock.On call
-//   - sources model.Source
-//   - mutationType ...model.MutationType
-func (_e *MockWorkflow_Expecter) EstimateMutations(sources interface{}, mutationType ...interface{}) *MockWorkflow_EstimateMutations_Call {
-	return &MockWorkflow_EstimateMutations_Call{Call: _e.mock.On("EstimateMutations",
-		append([]interface{}{sources}, mutationType...)...)}
+// Estimate is a helper method to define mock.On call
+//   - args domain.EstimateArgs
+func (_e *MockWorkflow_Expecter) Estimate(args interface{}) *MockWorkflow_Estimate_Call {
+	return &MockWorkflow_Estimate_Call{Call: _e.mock.On("Estimate", args)}
 }
 
-func (_c *MockWorkflow_EstimateMutations_Call) Run(run func(sources model.Source, mutationType ...model.MutationType)) *MockWorkflow_EstimateMutations_Call {
+func (_c *MockWorkflow_Estimate_Call) Run(run func(args domain.EstimateArgs)) *MockWorkflow_Estimate_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]model.MutationType, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(model.MutationType)
-			}
-		}
-		run(args[0].(model.Source), variadicArgs...)
+		run(args[0].(domain.EstimateArgs))
 	})
 	return _c
 }
 
-func (_c *MockWorkflow_EstimateMutations_Call) Return(_a0 int, _a1 error) *MockWorkflow_EstimateMutations_Call {
-	_c.Call.Return(_a0, _a1)
+func (_c *MockWorkflow_Estimate_Call) Return(_a0 error) *MockWorkflow_Estimate_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockWorkflow_EstimateMutations_Call) RunAndReturn(run func(model.Source, ...model.MutationType) (int, error)) *MockWorkflow_EstimateMutations_Call {
+func (_c *MockWorkflow_Estimate_Call) RunAndReturn(run func(domain.EstimateArgs) error) *MockWorkflow_Estimate_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// GenerateMutations provides a mock function with given fields: sources, mutationType
-func (_m *MockWorkflow) GenerateMutations(sources model.Source, mutationType ...model.MutationType) ([]model.Mutation, error) {
-	_va := make([]interface{}, len(mutationType))
-	for _i := range mutationType {
-		_va[_i] = mutationType[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, sources)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+// Test provides a mock function with given fields: args
+func (_m *MockWorkflow) Test(args domain.TestArgs) error {
+	ret := _m.Called(args)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GenerateMutations")
+		panic("no return value specified for Test")
 	}
 
-	var r0 []model.Mutation
-	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) ([]model.Mutation, error)); ok {
-		return rf(sources, mutationType...)
-	}
-	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) []model.Mutation); ok {
-		r0 = rf(sources, mutationType...)
+	var r0 error
+	if rf, ok := ret.Get(0).(func(domain.TestArgs) error); ok {
+		r0 = rf(args)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]model.Mutation)
-		}
+		r0 = ret.Error(0)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Source, ...model.MutationType) error); ok {
-		r1 = rf(sources, mutationType...)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
-// MockWorkflow_GenerateMutations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GenerateMutations'
-type MockWorkflow_GenerateMutations_Call struct {
+// MockWorkflow_Test_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Test'
+type MockWorkflow_Test_Call struct {
 	*mock.Call
 }
 
-// GenerateMutations is a helper method to define mock.On call
-//   - sources model.Source
-//   - mutationType ...model.MutationType
-func (_e *MockWorkflow_Expecter) GenerateMutations(sources interface{}, mutationType ...interface{}) *MockWorkflow_GenerateMutations_Call {
-	return &MockWorkflow_GenerateMutations_Call{Call: _e.mock.On("GenerateMutations",
-		append([]interface{}{sources}, mutationType...)...)}
+// Test is a helper method to define mock.On call
+//   - args domain.TestArgs
+func (_e *MockWorkflow_Expecter) Test(args interface{}) *MockWorkflow_Test_Call {
+	return &MockWorkflow_Test_Call{Call: _e.mock.On("Test", args)}
 }
 
-func (_c *MockWorkflow_GenerateMutations_Call) Run(run func(sources model.Source, mutationType ...model.MutationType)) *MockWorkflow_GenerateMutations_Call {
+func (_c *MockWorkflow_Test_Call) Run(run func(args domain.TestArgs)) *MockWorkflow_Test_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]model.MutationType, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(model.MutationType)
-			}
-		}
-		run(args[0].(model.Source), variadicArgs...)
+		run(args[0].(domain.TestArgs))
 	})
 	return _c
 }
 
-func (_c *MockWorkflow_GenerateMutations_Call) Return(_a0 []model.Mutation, _a1 error) *MockWorkflow_GenerateMutations_Call {
-	_c.Call.Return(_a0, _a1)
+func (_c *MockWorkflow_Test_Call) Return(_a0 error) *MockWorkflow_Test_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockWorkflow_GenerateMutations_Call) RunAndReturn(run func(model.Source, ...model.MutationType) ([]model.Mutation, error)) *MockWorkflow_GenerateMutations_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetSources provides a mock function with given fields: roots
-func (_m *MockWorkflow) GetSources(roots ...model.Path) ([]model.Source, error) {
-	_va := make([]interface{}, len(roots))
-	for _i := range roots {
-		_va[_i] = roots[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetSources")
-	}
-
-	var r0 []model.Source
-	var r1 error
-	if rf, ok := ret.Get(0).(func(...model.Path) ([]model.Source, error)); ok {
-		return rf(roots...)
-	}
-	if rf, ok := ret.Get(0).(func(...model.Path) []model.Source); ok {
-		r0 = rf(roots...)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]model.Source)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(...model.Path) error); ok {
-		r1 = rf(roots...)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockWorkflow_GetSources_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSources'
-type MockWorkflow_GetSources_Call struct {
-	*mock.Call
-}
-
-// GetSources is a helper method to define mock.On call
-//   - roots ...model.Path
-func (_e *MockWorkflow_Expecter) GetSources(roots ...interface{}) *MockWorkflow_GetSources_Call {
-	return &MockWorkflow_GetSources_Call{Call: _e.mock.On("GetSources",
-		append([]interface{}{}, roots...)...)}
-}
-
-func (_c *MockWorkflow_GetSources_Call) Run(run func(roots ...model.Path)) *MockWorkflow_GetSources_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]model.Path, len(args)-0)
-		for i, a := range args[0:] {
-			if a != nil {
-				variadicArgs[i] = a.(model.Path)
-			}
-		}
-		run(variadicArgs...)
-	})
-	return _c
-}
-
-func (_c *MockWorkflow_GetSources_Call) Return(_a0 []model.Source, _a1 error) *MockWorkflow_GetSources_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockWorkflow_GetSources_Call) RunAndReturn(run func(...model.Path) ([]model.Source, error)) *MockWorkflow_GetSources_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// RunMutationTests provides a mock function with given fields: sources, threads
-func (_m *MockWorkflow) RunMutationTests(sources []model.Source, threads int) (map[model.Path]model.FileResult, error) {
-	ret := _m.Called(sources, threads)
-
-	if len(ret) == 0 {
-		panic("no return value specified for RunMutationTests")
-	}
-
-	var r0 map[model.Path]model.FileResult
-	var r1 error
-	if rf, ok := ret.Get(0).(func([]model.Source, int) (map[model.Path]model.FileResult, error)); ok {
-		return rf(sources, threads)
-	}
-	if rf, ok := ret.Get(0).(func([]model.Source, int) map[model.Path]model.FileResult); ok {
-		r0 = rf(sources, threads)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[model.Path]model.FileResult)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func([]model.Source, int) error); ok {
-		r1 = rf(sources, threads)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockWorkflow_RunMutationTests_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RunMutationTests'
-type MockWorkflow_RunMutationTests_Call struct {
-	*mock.Call
-}
-
-// RunMutationTests is a helper method to define mock.On call
-//   - sources []model.Source
-//   - threads int
-func (_e *MockWorkflow_Expecter) RunMutationTests(sources interface{}, threads interface{}) *MockWorkflow_RunMutationTests_Call {
-	return &MockWorkflow_RunMutationTests_Call{Call: _e.mock.On("RunMutationTests", sources, threads)}
-}
-
-func (_c *MockWorkflow_RunMutationTests_Call) Run(run func(sources []model.Source, threads int)) *MockWorkflow_RunMutationTests_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]model.Source), args[1].(int))
-	})
-	return _c
-}
-
-func (_c *MockWorkflow_RunMutationTests_Call) Return(_a0 map[model.Path]model.FileResult, _a1 error) *MockWorkflow_RunMutationTests_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockWorkflow_RunMutationTests_Call) RunAndReturn(run func([]model.Source, int) (map[model.Path]model.FileResult, error)) *MockWorkflow_RunMutationTests_Call {
+func (_c *MockWorkflow_Test_Call) RunAndReturn(run func(domain.TestArgs) error) *MockWorkflow_Test_Call {
 	_c.Call.Return(run)
 	return _c
 }

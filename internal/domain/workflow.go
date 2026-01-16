@@ -2,301 +2,204 @@ package domain
 
 import (
 	"fmt"
-	"go/token"
-	"os"
-	"strings"
 	"sync"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
 	m "github.com/mouse-blink/gooze/internal/model"
+	"golang.org/x/sync/errgroup"
 )
 
-const goFileExt = ".go"
+var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
 
-// Workflow defines the interface for mutation testing operations.
+// EstimateArgs contains the arguments for estimating mutations.
+type EstimateArgs struct {
+	Paths    []m.Path
+	UseCache bool
+}
+
+// TestArgs contains the arguments for running mutation tests.
+type TestArgs struct {
+	EstimateArgs
+	Reports         m.Path
+	Threads         uint
+	ShardIndex      uint
+	TotalShardCount uint
+}
+
+// Workflow defines the interface for the mutation testing workflow.
 type Workflow interface {
-	GetSources(roots ...m.Path) ([]m.Source, error)
-	GenerateMutations(sources m.Source, mutationType ...m.MutationType) ([]m.Mutation, error)
-	EstimateMutations(sources m.Source, mutationType ...m.MutationType) (int, error)
-	RunMutationTests(sources []m.Source, threads int) (map[m.Path]m.FileResult, error)
+	Estimate(args EstimateArgs) error
+	Test(args TestArgs) error
 }
 
 type workflow struct {
-	fsAdapter adapter.SourceFSAdapter
-	goAdapter adapter.GoFileAdapter
-	mutagen   Mutagen
-	orch      Orchestrator
+	adapter.ReportStore
+	adapter.SourceFSAdapter
+	Orchestrator
+	Mutagen
 }
 
-// NewWorkflow creates a new Workflow instance with the provided adapters.
-func NewWorkflow(fsAdapter adapter.SourceFSAdapter, goAdapter adapter.GoFileAdapter, testAdapter adapter.TestRunnerAdapter) Workflow {
+// NewWorkflow creates a new WorkflowV2 instance with the provided dependencies.
+func NewWorkflow(
+	fsAdapter adapter.SourceFSAdapter,
+	reportStore adapter.ReportStore,
+	orchestrator Orchestrator,
+	mutagen Mutagen,
+) Workflow {
 	return &workflow{
-		fsAdapter: fsAdapter,
-		goAdapter: goAdapter,
-		mutagen:   NewMutagen(),
-		orch:      NewOrchestrator(fsAdapter, testAdapter),
+		SourceFSAdapter: fsAdapter,
+		ReportStore:     reportStore,
+		Orchestrator:    orchestrator,
+		Mutagen:         mutagen,
 	}
 }
 
-// GetSources walks directory trees and identifies code scopes for mutation testing.
-// Supports multiple paths and ./... suffix for recursive scanning.
-// It distinguishes between:
-// - Global scope (const, var, type declarations) - for mutations like boolean literals, numbers
-// - Init functions - for all mutation types
-// - Regular functions - for function-specific mutations.
-func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
-	if len(roots) == 0 {
-		return []m.Source{}, nil
+func (w *workflow) Estimate(args EstimateArgs) error {
+	allMutations, err := w.GetMutations(args.Paths)
+	if err != nil {
+		return fmt.Errorf("generate mutations: %w", err)
+	}
+	for _, mutation := range allMutations {
+		fmt.Printf("Mutation ID: %d, Type: %v, Source: %s\n", mutation.ID, mutation.Type, mutation.Source.Origin.Path)
+	}
+	return nil
+}
+
+func (w *workflow) Test(args TestArgs) error {
+	allMutations, err := w.GetMutations(args.Paths)
+	if err != nil {
+		return fmt.Errorf("generate mutations: %w", err)
 	}
 
-	seen := make(map[string]bool)
+	shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
 
-	var allSources []m.Source
+	reports, err := w.TestReports(shardMutations, args.Threads)
+	if err != nil {
+		return fmt.Errorf("run mutation tests: %w", err)
+	}
+	for _, report := range reports {
+		fmt.Printf("Source: %s\n", report.Source.Origin.Path)
+		for mutationType, results := range report.Result {
+			for _, result := range results {
+				fmt.Printf("Mutation ID: %s, Type: %v, Status: %v\n", result.MutationID, mutationType, result.Status)
+			}
+		}
+	}
+	err = w.SaveReports(args.Reports, reports)
+	if err != nil {
+		return fmt.Errorf("save reports: %w", err)
+	}
 
-	for _, root := range roots {
-		sources, err := w.scanPath(root)
+	return nil
+}
+
+func (w *workflow) GetMutations(paths []m.Path) ([]m.MutationV2, error) {
+	sources, err := w.Get(paths)
+	if err != nil {
+		return nil, fmt.Errorf("get sources: %w", err)
+	}
+	changedSSources, err := w.GetChangedSources(sources)
+	if err != nil {
+		return nil, fmt.Errorf("get changed sources: %w", err)
+	}
+
+	allMutations, err := w.GenerateAllMutations(changedSSources)
+	if err != nil {
+		return nil, fmt.Errorf("generate mutations: %w", err)
+	}
+	return allMutations, nil
+}
+
+func (w *workflow) GetChangedSources(sources []m.SourceV2) ([]m.SourceV2, error) {
+	// Placeholder for future implementation
+	return sources, nil
+}
+
+func (w *workflow) GenerateAllMutations(sources []m.SourceV2) ([]m.MutationV2, error) {
+	mutationsIndex := 0
+
+	var allMutations []m.MutationV2
+
+	for _, source := range sources {
+		mutations, err := w.GenerateMutation(source, mutationsIndex, DefaultMutations...)
 		if err != nil {
 			return nil, err
 		}
 
-		for _, source := range sources {
-			absPath := string(source.Origin)
-			if !seen[absPath] {
-				seen[absPath] = true
+		mutationsIndex += len(mutations)
+		allMutations = append(allMutations, mutations...)
+	}
 
-				allSources = append(allSources, source)
-			}
+	return allMutations, nil
+}
+
+func (w *workflow) ShardMutations(allMutations []m.MutationV2, shardIndex uint, totalShardCount uint) []m.MutationV2 {
+	if totalShardCount == 0 {
+		return allMutations
+	}
+
+	var shardMutations []m.MutationV2
+
+	for _, mutation := range allMutations {
+		if mutation.ID%totalShardCount == shardIndex {
+			shardMutations = append(shardMutations, mutation)
 		}
 	}
 
-	return allSources, nil
+	return shardMutations
 }
 
-// GenerateMutations delegates to the mutagen for pure mutation generation.
-func (w *workflow) GenerateMutations(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
-	return w.mutagen.GenerateMutations(source, mutationTypes...)
-}
+func (w *workflow) TestReports(allMutations []m.MutationV2, threads uint) ([]m.ReportV2, error) {
+	reports := []m.ReportV2{}
+	errors := []error{}
 
-// EstimateMutations delegates to the mutagen for mutation estimation.
-func (w *workflow) EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error) {
-	return w.mutagen.EstimateMutations(source, mutationTypes...)
-}
+	var (
+		reportsMutex sync.Mutex
+		errorsMutex  sync.Mutex
+	)
 
-// RunMutationTests executes mutation testing on all provided sources.
-func (w *workflow) RunMutationTests(sources []m.Source, threads int) (map[m.Path]m.FileResult, error) {
-	if threads <= 0 {
-		threads = 1
+	var group errgroup.Group
+	if threads > 0 {
+		group.SetLimit(int(threads))
 	}
 
-	results := make(map[m.Path]m.FileResult)
+	for _, mutation := range allMutations {
+		currentMutation := mutation
 
-	// Initialize all sources with empty results
-	for _, source := range sources {
-		results[source.Origin] = m.FileResult{
-			Source:  source,
-			Reports: []m.Report{},
-		}
-	}
-
-	jobs := make(chan m.Source, len(sources))
-	resultsChan := make(chan sourceResult, len(sources))
-
-	var wg sync.WaitGroup
-
-	// Start worker pool
-	for range threads {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			w.processSourceWorker(jobs, resultsChan)
-		}()
-	}
-
-	// Send jobs to workers
-	for _, src := range sources {
-		jobs <- src
-	}
-
-	close(jobs)
-
-	// Wait for all workers to complete
-	wg.Wait()
-	close(resultsChan)
-
-	// Collect results
-	for res := range resultsChan {
-		if res.err != nil {
-			return nil, res.err
-		}
-
-		fr := results[res.origin]
-		fr.Reports = append(fr.Reports, res.reports...)
-		results[res.origin] = fr
-	}
-
-	return results, nil
-}
-
-// sourceResult holds the result of processing a single source file.
-type sourceResult struct {
-	origin  m.Path
-	reports []m.Report
-	err     error
-}
-
-// processSourceWorker processes sources from the jobs channel and sends results to resultsChan.
-func (w *workflow) processSourceWorker(jobs <-chan m.Source, resultsChan chan<- sourceResult) {
-	for source := range jobs {
-		mutations, err := w.GenerateMutations(source)
-		if err != nil {
-			resultsChan <- sourceResult{
-				origin: source.Origin,
-				err:    fmt.Errorf("failed to generate mutations for %s: %w", source.Origin, err),
-			}
-
-			continue
-		}
-
-		reports := make([]m.Report, 0, len(mutations))
-
-		for _, mutation := range mutations {
-			report, err := w.orch.TestMutation(source, mutation)
+		group.Go(func() error {
+			mutationResult, err := w.TestMutationV2(currentMutation)
 			if err != nil {
-				resultsChan <- sourceResult{
-					origin: source.Origin,
-					err:    fmt.Errorf("failed to test mutation %s: %w", mutation.ID, err),
-				}
+				errorsMutex.Lock()
 
-				continue
+				errors = append(errors, err)
+
+				errorsMutex.Unlock()
+
+				return nil
 			}
+
+			report := m.ReportV2{
+				Source: currentMutation.Source,
+				Result: mutationResult,
+			}
+
+			reportsMutex.Lock()
 
 			reports = append(reports, report)
-		}
 
-		resultsChan <- sourceResult{
-			origin:  source.Origin,
-			reports: reports,
-		}
-	}
-}
-
-// scanPath scans a single path (with optional /... suffix) for Go source files.
-func (w *workflow) scanPath(root m.Path) ([]m.Source, error) {
-	rootStr, recursive := parseRootPath(string(root))
-
-	if _, err := w.fsAdapter.FileInfo(m.Path(rootStr)); err != nil {
-		return nil, fmt.Errorf("root path error: %w", err)
-	}
-
-	var sources []m.Source
-
-	fset := token.NewFileSet()
-
-	err := w.fsAdapter.Walk(m.Path(rootStr), recursive, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			if !recursive && path != rootStr {
-				return fmt.Errorf("skip directory") // Skip subdirectories if not recursive
-			}
+			reportsMutex.Unlock()
 
 			return nil
-		}
-
-		source, shouldInclude, processErr := w.processFile(m.Path(path), fset)
-		if processErr != nil {
-			return processErr
-		}
-
-		if shouldInclude {
-			sources = append(sources, source)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		})
 	}
 
-	return sources, nil
-}
-
-// parseRootPath extracts the root path and recursive flag from a path string.
-func parseRootPath(rootStr string) (path string, recursive bool) {
-	if len(rootStr) >= 4 && rootStr[len(rootStr)-4:] == "/..." {
-		return rootStr[:len(rootStr)-4], true
+	if err := group.Wait(); err != nil {
+		return reports, err
 	}
 
-	return rootStr, false
-}
-
-// processFile parses and extracts scopes from a single Go file.
-func (w *workflow) processFile(path m.Path, fset *token.FileSet) (m.Source, bool, error) {
-	pathStr := string(path)
-
-	// Skip non-Go files
-	if !strings.HasSuffix(pathStr, goFileExt) {
-		return m.Source{}, false, nil
+	if len(errors) > 0 {
+		return reports, fmt.Errorf("errors occurred during mutation testing: %v", errors)
 	}
 
-	// Skip test files (e.g., *_test.go)
-	if strings.HasSuffix(pathStr, "_test.go") {
-		return m.Source{}, false, nil
-	}
-
-	src, err := w.fsAdapter.ReadFile(path)
-	if err != nil {
-		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip unreadable files
-	}
-
-	file, err := w.goAdapter.Parse(fset, pathStr, src)
-	if err != nil {
-		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip unparsable files
-	}
-
-	scopes := w.goAdapter.ExtractScopes(fset, file)
-	if len(scopes) == 0 {
-		return m.Source{}, false, nil
-	}
-
-	functionLines := w.goAdapter.FunctionLines(scopes)
-	hasGlobals := hasGlobalScopes(scopes)
-
-	// Include only if it has functions/init or global declarations
-	if len(functionLines) == 0 && !hasGlobals {
-		return m.Source{}, false, nil
-	}
-
-	hash, err := w.fsAdapter.HashFile(path)
-	if err != nil {
-		return m.Source{}, false, fmt.Errorf("hash error for %s: %w", path, err)
-	}
-
-	// Detect corresponding test file
-	testFile, _ := w.fsAdapter.DetectTestFile(path)
-
-	source := m.Source{
-		Hash:   hash,
-		Origin: path,
-		Test:   testFile,
-		Lines:  functionLines,
-		Scopes: scopes,
-	}
-
-	return source, true, nil
-}
-
-// hasGlobalScopes checks if there are any global const/var scopes.
-func hasGlobalScopes(scopes []m.CodeScope) bool {
-	for _, scope := range scopes {
-		if scope.Type == m.ScopeGlobal {
-			return true
-		}
-	}
-
-	return false
+	return reports, nil
 }
