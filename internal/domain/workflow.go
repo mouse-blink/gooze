@@ -80,12 +80,15 @@ func (w *workflow) Estimate(args EstimateArgs) error {
 }
 
 func (w *workflow) Test(args TestArgs) error {
+	w.DisplayConcurencyInfo(args.Threads, args.TotalShardCount)
+
 	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
 		return fmt.Errorf("generate mutations: %w", err)
 	}
 
 	shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
+	w.DusplayUpcomingTestsInfo(len(shardMutations))
 
 	reports, err := w.TestReports(shardMutations, args.Threads)
 	if err != nil {
@@ -186,6 +189,8 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 		currentMutation := mutation
 
 		group.Go(func() error {
+			w.DisplayStartingTestInfo(currentMutation)
+
 			mutationResult, err := w.TestMutation(currentMutation)
 			if err != nil {
 				errorsMutex.Lock()
@@ -207,6 +212,7 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 			reports = append(reports, report)
 
 			reportsMutex.Unlock()
+			w.DisplayCompletedTestInfo(currentMutation, mutationResult)
 
 			return nil
 		})

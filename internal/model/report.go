@@ -14,6 +14,21 @@ const (
 	Error
 )
 
+func (t TestStatus) String() string {
+	switch t {
+	case Killed:
+		return "killed"
+	case Survived:
+		return "survived"
+	case Skipped:
+		return "skipped"
+	case Error:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
 // Result represents the test results for mutations grouped by type.
 type Result map[MutationType][]struct {
 	MutationID string

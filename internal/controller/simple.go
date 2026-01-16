@@ -82,6 +82,53 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 	return nil
 }
 
+// DisplayConcurencyInfo shows concurrency settings.
+func (s *SimpleUI) DisplayConcurencyInfo(threads int, count int) {
+	s.printf("Running %d mutations with %d worker(s)\n", count, threads)
+}
+
+// DusplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
+func (s *SimpleUI) DusplayUpcomingTestsInfo(i int) {
+	s.printf("Upcoming mutations: %d\n", i)
+}
+
+// DisplayStartingTestInfo shows info about the mutation test starting.
+func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation) {
+	path := ""
+	if currentMutation.Source.Origin != nil {
+		path = string(currentMutation.Source.Origin.Path)
+	}
+
+	s.printf("Starting mutation %d (%s) %s\n", currentMutation.ID, currentMutation.Type, path)
+}
+
+// DisplayCompletedTestInfo shows info about the mutation test completion.
+func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result) {
+	status := unknownStatusLabel
+	if results, ok := mutationResult[currentMutation.Type]; ok && len(results) > 0 {
+		status = formatTestStatus(results[0].Status)
+	}
+
+	s.printf("Completed mutation %d (%s) -> %s\n", currentMutation.ID, currentMutation.Type, status)
+}
+
 func (s *SimpleUI) printf(format string, args ...interface{}) {
 	_, _ = fmt.Fprintf(s.cmd.OutOrStdout(), format, args...)
 }
+
+func formatTestStatus(status m.TestStatus) string {
+	switch status {
+	case m.Killed:
+		return "killed"
+	case m.Survived:
+		return "survived"
+	case m.Skipped:
+		return "skipped"
+	case m.Error:
+		return "error"
+	default:
+		return unknownStatusLabel
+	}
+}
+
+const unknownStatusLabel = "unknown"

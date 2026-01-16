@@ -17,4 +17,8 @@ type UI interface {
 	Start() error
 	Close()
 	DisplayEstimation(mutations []m.Mutation, err error) error
+	DisplayConcurencyInfo(threads int, count int)
+	DusplayUpcomingTestsInfo(i int)
+	DisplayStartingTestInfo(currentMutation m.Mutation)
+	DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result)
 }
