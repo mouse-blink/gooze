@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
 	"github.com/mouse-blink/gooze/internal/controller"
@@ -61,26 +62,37 @@ func NewWorkflow(
 }
 
 func (w *workflow) Estimate(args EstimateArgs) error {
-	if err := w.Start(); err != nil {
+	if err := w.Start(controller.WithEstimateMode()); err != nil {
 		return err
 	}
-	defer w.Close()
 
 	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
+		w.Close()
 		return fmt.Errorf("generate mutations: %w", err)
 	}
 
 	err = w.DisplayEstimation(allMutations, nil)
 	if err != nil {
+		w.Close()
 		return fmt.Errorf("display: %w", err)
 	}
+
+	// Wait for UI to be closed by user (press 'q')
+	w.Wait()
+	w.Close()
 
 	return nil
 }
 
 func (w *workflow) Test(args TestArgs) error {
-	w.DisplayConcurencyInfo(args.Threads, args.TotalShardCount)
+	// Start with test execution mode
+	if err := w.Start(controller.WithTestMode()); err != nil {
+		return err
+	}
+	defer w.Close()
+
+	w.DisplayConcurencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
 
 	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
@@ -95,20 +107,13 @@ func (w *workflow) Test(args TestArgs) error {
 		return fmt.Errorf("run mutation tests: %w", err)
 	}
 
-	for _, report := range reports {
-		fmt.Printf("Source: %s\n", report.Source.Origin.Path)
-
-		for mutationType, results := range report.Result {
-			for _, result := range results {
-				fmt.Printf("Mutation ID: %s, Type: %v, Status: %v\n", result.MutationID, mutationType, result.Status)
-			}
-		}
-	}
-
 	err = w.SaveReports(args.Reports, reports)
 	if err != nil {
 		return fmt.Errorf("save reports: %w", err)
 	}
+
+	// Wait for UI to be closed by user (press 'q')
+	w.Wait()
 
 	return nil
 }
@@ -176,8 +181,9 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 	errors := []error{}
 
 	var (
-		reportsMutex sync.Mutex
-		errorsMutex  sync.Mutex
+		reportsMutex    sync.Mutex
+		errorsMutex     sync.Mutex
+		threadIDCounter int32 = -1
 	)
 
 	var group errgroup.Group
@@ -189,7 +195,10 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 		currentMutation := mutation
 
 		group.Go(func() error {
-			w.DisplayStartingTestInfo(currentMutation)
+			// Assign a thread ID to this goroutine
+			threadID := int(atomic.AddInt32(&threadIDCounter, 1)) % threads
+
+			w.DisplayStartingTestInfo(currentMutation, threadID)
 
 			mutationResult, err := w.TestMutation(currentMutation)
 			if err != nil {

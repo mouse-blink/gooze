@@ -21,13 +21,18 @@ func NewSimpleUI(cmd *cobra.Command) *SimpleUI {
 }
 
 // Start initializes the UI.
-func (s *SimpleUI) Start() error {
+func (s *SimpleUI) Start(_ ...StartOption) error {
 	return nil
 }
 
 // Close finalizes the UI.
 func (s *SimpleUI) Close() {
 
+}
+
+// Wait blocks until the UI is closed (no-op for SimpleUI).
+func (s *SimpleUI) Wait() {
+	// SimpleUI doesn't block - it just prints and continues
 }
 
 // DisplayEstimation prints the estimation results or error.
@@ -83,8 +88,8 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 }
 
 // DisplayConcurencyInfo shows concurrency settings.
-func (s *SimpleUI) DisplayConcurencyInfo(threads int, count int) {
-	s.printf("Running %d mutations with %d worker(s)\n", count, threads)
+func (s *SimpleUI) DisplayConcurencyInfo(threads int, shardIndex int, count int) {
+	s.printf("Running %d mutations with %d worker(s) (Shard %d/%d)\n", count, threads, shardIndex, count)
 }
 
 // DusplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
@@ -93,7 +98,7 @@ func (s *SimpleUI) DusplayUpcomingTestsInfo(i int) {
 }
 
 // DisplayStartingTestInfo shows info about the mutation test starting.
-func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation) {
+func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation, _ int) {
 	path := ""
 	if currentMutation.Source.Origin != nil {
 		path = string(currentMutation.Source.Origin.Path)
