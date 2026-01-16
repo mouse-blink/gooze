@@ -9,9 +9,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
+
+// EstimateArgs contains the arguments for estimating mutations.
+type EstimateArgs struct {
+	Paths    []m.Path
+	UseCache bool
+}
+
 // TestArgs contains the arguments for running mutation tests.
 type TestArgs struct {
-	Paths           []m.Path
+	EstimateArgs
 	Reports         m.Path
 	Threads         uint
 	ShardIndex      uint
@@ -20,6 +28,7 @@ type TestArgs struct {
 
 // WorkflowV2 defines the interface for the mutation testing workflow.
 type WorkflowV2 interface {
+	Estimate(args EstimateArgs) error
 	Test(args TestArgs) error
 }
 
@@ -45,13 +54,19 @@ func NewWorkflowV2(
 	}
 }
 
-func (w *workflowV2) Test(args TestArgs) error {
-	sources, err := w.Get(args.Paths)
+func (w *workflowV2) Estimate(args EstimateArgs) error {
+	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
-		return fmt.Errorf("get sources: %w", err)
+		return fmt.Errorf("generate mutations: %w", err)
 	}
+	for _, mutation := range allMutations {
+		fmt.Printf("Mutation ID: %d, Type: %v, Source: %s\n", mutation.ID, mutation.Type, mutation.Source.Origin.Path)
+	}
+	return nil
+}
 
-	allMutations, err := w.GenerateAllMutations(sources)
+func (w *workflowV2) Test(args TestArgs) error {
+	allMutations, err := w.GetMutations(args.Paths)
 	if err != nil {
 		return fmt.Errorf("generate mutations: %w", err)
 	}
@@ -62,13 +77,37 @@ func (w *workflowV2) Test(args TestArgs) error {
 	if err != nil {
 		return fmt.Errorf("run mutation tests: %w", err)
 	}
-
+	for _, report := range reports {
+		fmt.Printf("Source: %s\n", report.Source.Origin.Path)
+		for mutationType, results := range report.Result {
+			for _, result := range results {
+				fmt.Printf("Mutation ID: %s, Type: %v, Status: %v\n", result.MutationID, mutationType, result.Status)
+			}
+		}
+	}
 	err = w.SaveReports(args.Reports, reports)
 	if err != nil {
 		return fmt.Errorf("save reports: %w", err)
 	}
-
+	
 	return nil
+}
+
+func (w *workflowV2) GetMutations(paths []m.Path) ([]m.MutationV2, error) {
+	sources, err := w.Get(paths)
+	if err != nil {
+		return nil, fmt.Errorf("get sources: %w", err)
+	}
+	changedSSources, err := w.GetChangedSources(sources)
+	if err != nil {
+		return nil, fmt.Errorf("get changed sources: %w", err)
+	}
+
+	allMutations, err := w.GenerateAllMutations(changedSSources)
+	if err != nil {
+		return nil, fmt.Errorf("generate mutations: %w", err)
+	}
+	return allMutations, nil
 }
 
 func (w *workflowV2) GetChangedSources(sources []m.SourceV2) ([]m.SourceV2, error) {
@@ -82,7 +121,7 @@ func (w *workflowV2) GenerateAllMutations(sources []m.SourceV2) ([]m.MutationV2,
 	var allMutations []m.MutationV2
 
 	for _, source := range sources {
-		mutations, err := w.GenerateMutationV2(source, mutationsIndex)
+		mutations, err := w.GenerateMutationV2(source, mutationsIndex, DefaultMutations...)
 		if err != nil {
 			return nil, err
 		}

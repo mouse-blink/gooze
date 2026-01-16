@@ -33,7 +33,75 @@ func NewOrchestrator(fsAdapter adapter.SourceFSAdapter, testAdapter adapter.Test
 }
 
 func (to *orchestrator) TestMutationV2(mutation m.MutationV2) (m.Result, error) {
-	panic("not implemented")
+	result := m.Result{}
+
+	if mutation.Source.Origin == nil {
+		return result, fmt.Errorf("source origin is nil")
+	}
+
+	if mutation.Source.Test == nil {
+		result[mutation.Type] = []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{
+			MutationID: fmt.Sprintf("%d", mutation.ID),
+			Status:     m.Survived,
+			Err:        nil,
+		}}
+		return result, nil
+	}
+
+	projectRoot, err := to.fsAdapter.FindProjectRoot(mutation.Source.Origin.Path)
+	if err != nil {
+		return result, fmt.Errorf("failed to find project root: %w", err)
+	}
+
+	tmpDir, err := to.fsAdapter.CreateTempDir("gooze-mutation-*")
+	if err != nil {
+		return result, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer to.cleanupTempDir(tmpDir)
+
+	if err := to.fsAdapter.CopyDir(projectRoot, tmpDir); err != nil {
+		return result, fmt.Errorf("failed to copy project: %w", err)
+	}
+
+	relSourcePath, err := to.fsAdapter.RelPath(projectRoot, mutation.Source.Origin.Path)
+	if err != nil {
+		return result, fmt.Errorf("failed to get relative source path: %w", err)
+	}
+
+	tmpSourcePath := to.fsAdapter.JoinPath(string(tmpDir), string(relSourcePath))
+
+	if err := to.fsAdapter.WriteFile(tmpSourcePath, mutation.MutatedCode, 0o600); err != nil {
+		return result, fmt.Errorf("failed to write mutated file: %w", err)
+	}
+
+	relTestPath, err := to.fsAdapter.RelPath(projectRoot, mutation.Source.Test.Path)
+	if err != nil {
+		return result, fmt.Errorf("failed to get relative test path: %w", err)
+	}
+
+	tmpTestPath := to.fsAdapter.JoinPath(string(tmpDir), string(relTestPath))
+
+	_, testErr := to.testAdapter.RunGoTest(string(tmpDir), string(tmpTestPath))
+	status := m.Survived
+	if testErr != nil {
+		status = m.Killed
+	}
+
+	result[mutation.Type] = []struct {
+		MutationID string
+		Status     m.TestStatus
+		Err        error
+	}{{
+		MutationID: fmt.Sprintf("%d", mutation.ID),
+		Status:     status,
+		Err:        nil,
+	}}
+
+	return result, nil
 }
 
 // TestMutation applies a mutation to source code and runs tests to check if the mutation is detected.

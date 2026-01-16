@@ -384,6 +384,33 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 
 		assertSourceV2(t, &sources[0], mainPath, mainContent, "main", "", nil)
 	})
+
+	t.Run("broken source files are skipped", func(t *testing.T) {
+		root := t.TempDir()
+		brokenPath := filepath.Join(root, "broken.go")
+		writeTestFile(t, brokenPath, "package main\nfunc {\n")
+
+		sources, err := adapter.Get([]m.Path{m.Path(root)})
+		require.NoError(t, err)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("broken test files are ignored", func(t *testing.T) {
+		root := t.TempDir()
+		sourcePath := filepath.Join(root, "calc.go")
+		testPath := filepath.Join(root, "calc_test.go")
+		writeTestFile(t, sourcePath, "package calc\nfunc Sum(a, b int) int { return a + b }\n")
+		writeTestFile(t, testPath, "package calc\nfunc {\n")
+
+		sources, err := adapter.Get([]m.Path{m.Path(root)})
+		require.NoError(t, err)
+		require.Len(t, sources, 1)
+
+		if assert.NotNil(t, sources[0].Origin) {
+			assert.Equal(t, m.Path(sourcePath), sources[0].Origin.Path)
+		}
+		assert.Nil(t, sources[0].Test)
+	})
 }
 
 func writeTestFile(t *testing.T, path, contents string) {

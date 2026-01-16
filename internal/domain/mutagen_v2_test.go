@@ -1,0 +1,159 @@
+package domain
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	m "github.com/mouse-blink/gooze/internal/model"
+)
+
+func TestMutagen_GenerateMutationV2_ArithmeticBasic(t *testing.T) {
+	mg := NewMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	original := readFileBytes(t, source.Origin.Path)
+
+	mutations, err := mg.GenerateMutationV2(source, 0, m.MutationArithmetic)
+	if err != nil {
+		t.Fatalf("GenerateMutationV2 failed: %v", err)
+	}
+
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 mutations for +, got %d", len(mutations))
+	}
+
+	expectedOps := map[string]bool{"-": false, "*": false, "/": false, "%": false}
+
+	for i, mutation := range mutations {
+		if mutation.ID != uint(i) {
+			t.Fatalf("expected mutation ID %d, got %d", i, mutation.ID)
+		}
+		if mutation.Type != m.MutationArithmetic {
+			t.Fatalf("expected arithmetic mutation, got %v", mutation.Type)
+		}
+		if bytes.Equal(mutation.MutatedCode, original) {
+			t.Fatalf("expected mutated code to differ from original")
+		}
+
+		code := string(mutation.MutatedCode)
+		for op := range expectedOps {
+			if strings.Contains(code, "3"+op+"5") {
+				expectedOps[op] = true
+			}
+		}
+	}
+
+	for op, found := range expectedOps {
+		if !found {
+			t.Errorf("expected mutation to %s, but not found", op)
+		}
+	}
+}
+
+func TestMutagen_GenerateMutationV2_BooleanLiterals(t *testing.T) {
+	mg := NewMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
+	original := readFileBytes(t, source.Origin.Path)
+
+	mutations, err := mg.GenerateMutationV2(source, 5, m.MutationBoolean)
+	if err != nil {
+		t.Fatalf("GenerateMutationV2 failed: %v", err)
+	}
+
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 boolean mutations, got %d", len(mutations))
+	}
+
+	expectedFragments := map[string]bool{
+		"isValid := false":          false,
+		"isComplete := true":        false,
+		"checkStatus(false, false)": false,
+		"checkStatus(true, true)":   false,
+	}
+
+	for i, mutation := range mutations {
+		if mutation.ID != uint(5+i) {
+			t.Fatalf("expected mutation ID %d, got %d", 5+i, mutation.ID)
+		}
+		if mutation.Type != m.MutationBoolean {
+			t.Fatalf("expected boolean mutation, got %v", mutation.Type)
+		}
+		if bytes.Equal(mutation.MutatedCode, original) {
+			t.Fatalf("expected mutated code to differ from original")
+		}
+
+		code := string(mutation.MutatedCode)
+		for fragment := range expectedFragments {
+			if strings.Contains(code, fragment) {
+				expectedFragments[fragment] = true
+			}
+		}
+	}
+
+	for fragment, found := range expectedFragments {
+		if !found {
+			t.Errorf("expected mutated code to contain %q", fragment)
+		}
+	}
+}
+
+func TestMutagen_GenerateMutationV2_DefaultTypes(t *testing.T) {
+	mg := NewMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	mutations, err := mg.GenerateMutationV2(source, 0)
+	if err != nil {
+		t.Fatalf("GenerateMutationV2 failed: %v", err)
+	}
+
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 mutations, got %d", len(mutations))
+	}
+}
+
+func TestMutagen_GenerateMutationV2_InvalidType(t *testing.T) {
+	mg := NewMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	_, err := mg.GenerateMutationV2(source, 0, m.MutationType("invalid"))
+	if err == nil {
+		t.Fatalf("expected error for invalid mutation type")
+	}
+}
+
+func TestMutagen_GenerateMutationV2_InvalidSource(t *testing.T) {
+	mg := NewMutagen()
+
+	_, err := mg.GenerateMutationV2(m.SourceV2{}, 0, m.MutationArithmetic)
+	if err == nil {
+		t.Fatalf("expected error for missing source origin")
+	}
+}
+
+func makeSourceV2(t *testing.T, path string) m.SourceV2 {
+	t.Helper()
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("failed to resolve path: %v", err)
+	}
+
+	return m.SourceV2{
+		Origin: &m.File{Path: m.Path(abs)},
+	}
+}
+
+func readFileBytes(t *testing.T, path m.Path) []byte {
+	t.Helper()
+
+	content, err := os.ReadFile(string(path))
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+
+	return content
+}

@@ -31,7 +31,7 @@ func TestWorkflowV2_Test_Success(t *testing.T) {
 	}
 
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(mutations, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(m.Result{}, nil)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
 
@@ -39,7 +39,9 @@ func TestWorkflowV2_Test_Success(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -69,7 +71,9 @@ func TestWorkflowV2_Test_GetSourcesError(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:   []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports: "reports.json",
 	}
 	err := wf.Test(args)
@@ -92,13 +96,15 @@ func TestWorkflowV2_Test_GenerateMutationsError(t *testing.T) {
 
 	testErr := errors.New("failed to generate mutations")
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(nil, testErr)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(nil, testErr)
 
 	wf := NewWorkflowV2(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := TestArgs{
-		Paths:   []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports: "reports.json",
 	}
 	err := wf.Test(args)
@@ -125,14 +131,16 @@ func TestWorkflowV2_Test_TestMutationError(t *testing.T) {
 
 	testErr := errors.New("failed to test mutation")
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(mutations, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(nil, testErr)
 
 	wf := NewWorkflowV2(mockFSAdapter, mockReportStore, mockOrchestrator, mockMutagen)
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -161,7 +169,7 @@ func TestWorkflowV2_Test_SaveReportsError(t *testing.T) {
 	}
 
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(mutations, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(m.Result{}, nil)
 
 	saveErr := errors.New("failed to save reports")
@@ -171,7 +179,9 @@ func TestWorkflowV2_Test_SaveReportsError(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -197,7 +207,7 @@ func TestWorkflowV2_Test_NoMutations(t *testing.T) {
 
 	// No mutations generated
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return([]m.MutationV2{}, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return([]m.MutationV2{}, nil)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
 		return len(reports) == 0
 	})).Return(nil)
@@ -206,7 +216,9 @@ func TestWorkflowV2_Test_NoMutations(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -239,7 +251,7 @@ func TestWorkflowV2_Test_MultipleThreads(t *testing.T) {
 	}
 
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source}, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(mutations, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(m.Result{}, nil).Times(3)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
 		return len(reports) == 3
@@ -249,7 +261,9 @@ func TestWorkflowV2_Test_MultipleThreads(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         4,
 		ShardIndex:      0,
@@ -284,7 +298,7 @@ func TestWorkflowV2_Test_WithSharding(t *testing.T) {
 	}
 
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source}, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything).Return(mutations, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(mock.Anything, mock.Anything, DefaultMutations[0], DefaultMutations[1]).Return(mutations, nil)
 	// Only 2 mutations should be tested (IDs 0 and 3, since shardIndex=0, totalShards=3)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(m.Result{}, nil).Times(2)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
@@ -295,7 +309,9 @@ func TestWorkflowV2_Test_WithSharding(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"test.go"},
+		EstimateArgs: EstimateArgs{
+			Paths: []m.Path{"test.go"},
+		},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -331,8 +347,8 @@ func TestWorkflowV2_Test_MultipleSources(t *testing.T) {
 	}
 
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source1, source2}, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(source1, 0).Return(mutations1, nil)
-	mockMutagen.EXPECT().GenerateMutationV2(source2, 2).Return(mutations2, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(source1, 0, DefaultMutations[0], DefaultMutations[1]).Return(mutations1, nil)
+	mockMutagen.EXPECT().GenerateMutationV2(source2, 2, DefaultMutations[0], DefaultMutations[1]).Return(mutations2, nil)
 	mockOrchestrator.EXPECT().TestMutationV2(mock.Anything).Return(m.Result{}, nil).Times(3)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
 		return len(reports) == 3
@@ -342,7 +358,7 @@ func TestWorkflowV2_Test_MultipleSources(t *testing.T) {
 
 	// Act
 	args := TestArgs{
-		Paths:           []m.Path{"file1.go", "file2.go"},
+
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,

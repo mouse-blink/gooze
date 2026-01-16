@@ -389,7 +389,7 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.SourceV2, bool, e
 
 	fset := token.NewFileSet()
 
-	file, err := parser.ParseFile(fset, absPath, src, parser.PackageClauseOnly)
+	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
 	if err != nil {
 		return m.SourceV2{}, false, nil
 	}
@@ -408,8 +408,15 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.SourceV2, bool, e
 	var testFile *m.File
 
 	if testPath, _ := a.DetectTestFile(m.Path(absPath)); testPath != "" {
-		if testHash, err := a.HashFile(testPath); err == nil {
-			testFile = &m.File{Path: testPath, Hash: testHash}
+		testSrc, err := a.ReadFile(testPath)
+		if err == nil {
+			testFset := token.NewFileSet()
+			testAST, parseErr := parser.ParseFile(testFset, string(testPath), testSrc, parser.AllErrors)
+			if parseErr == nil && testAST != nil && testAST.Name != nil {
+				if testHash, err := a.HashFile(testPath); err == nil {
+					testFile = &m.File{Path: testPath, Hash: testHash}
+				}
+			}
 		}
 	}
 
