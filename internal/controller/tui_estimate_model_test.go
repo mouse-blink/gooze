@@ -56,9 +56,9 @@ func TestEstimateModel_HandleEstimationMsgAndView(t *testing.T) {
 	msg := estimationMsg{
 		total: 3,
 		paths: 2,
-		fileStats: map[string]int{
-			"b.go": 1,
-			"a.go": 2,
+		fileStats: map[string]fileStat{
+			"hash-b": {path: "b.go", count: 1},
+			"hash-a": {path: "a.go", count: 2},
 		},
 	}
 
@@ -133,7 +133,7 @@ func TestEstimateModel_UpdateBranches(t *testing.T) {
 	_ = model
 
 	updated.rendered = false
-	model, _ = updated.Update(estimationMsg{total: 1, paths: 1, fileStats: map[string]int{"a": 1}})
+	model, _ = updated.Update(estimationMsg{total: 1, paths: 1, fileStats: map[string]fileStat{"hash-a": {path: "a", count: 1}}})
 	if !model.(estimateModel).rendered {
 		t.Fatalf("expected rendered after estimationMsg")
 	}

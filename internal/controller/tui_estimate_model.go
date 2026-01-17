@@ -241,16 +241,18 @@ func (m estimateModel) handleEstimationMsg(msg estimationMsg) estimateModel {
 	m.totalFiles = msg.paths
 
 	// Create sorted file items
-	pathsList := make([]string, 0, len(msg.fileStats))
-	for path := range msg.fileStats {
-		pathsList = append(pathsList, path)
+	statsList := make([]fileStat, 0, len(msg.fileStats))
+	for _, stat := range msg.fileStats {
+		statsList = append(statsList, stat)
 	}
 
-	sort.Strings(pathsList)
+	sort.Slice(statsList, func(i, j int) bool {
+		return statsList[i].path < statsList[j].path
+	})
 
-	items := make([]list.Item, 0, len(pathsList))
-	for _, path := range pathsList {
-		items = append(items, fileItem{path: path, count: msg.fileStats[path]})
+	items := make([]list.Item, 0, len(statsList))
+	for _, stat := range statsList {
+		items = append(items, fileItem(stat))
 	}
 
 	m.fileList.SetItems(items)

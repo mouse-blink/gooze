@@ -76,7 +76,7 @@ func TestGenerateComparisonMutations(t *testing.T) {
 
 			content := []byte(tt.code)
 			source := m.Source{
-				Origin: &m.File{Path: "test.go"},
+				Origin: &m.File{FullPath: "test.go"},
 			}
 			mutationID := 0
 			mutations := []m.Mutation{}

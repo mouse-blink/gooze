@@ -15,7 +15,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	original := readFileBytes(t, source.Origin.Path)
+	original := readFileBytes(t, source.Origin.FullPath)
 
 	mutations, err := mg.GenerateMutation(source, 0, m.MutationArithmetic)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
-	original := readFileBytes(t, source.Origin.Path)
+	original := readFileBytes(t, source.Origin.FullPath)
 
 	mutations, err := mg.GenerateMutation(source, 5, m.MutationBoolean)
 	if err != nil {
@@ -144,7 +144,7 @@ func makeSourceV2(t *testing.T, path string) m.Source {
 	}
 
 	return m.Source{
-		Origin: &m.File{Path: m.Path(abs)},
+		Origin: &m.File{FullPath: m.Path(abs)},
 	}
 }
 

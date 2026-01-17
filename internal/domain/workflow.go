@@ -15,6 +15,9 @@ import (
 // DefaultMutations defines the default set of mutation types to generate.
 var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison, m.MutationLogical, m.MutationUnary}
 
+// DefaultIgnorePattern excludes generated mock files by prefix.
+const DefaultIgnorePattern = "^(mick_|mock_)"
+
 // EstimateArgs contains the arguments for estimating mutations.
 type EstimateArgs struct {
 	Paths    []m.Path
@@ -119,7 +122,7 @@ func (w *workflow) Test(args TestArgs) error {
 }
 
 func (w *workflow) GetMutations(paths []m.Path) ([]m.Mutation, error) {
-	sources, err := w.Get(paths)
+	sources, err := w.Get(paths, DefaultIgnorePattern)
 	if err != nil {
 		return nil, fmt.Errorf("get sources: %w", err)
 	}

@@ -18,9 +18,10 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 	ui := NewSimpleUI(cmd)
 
 	mutations := []m.Mutation{
-		{Source: m.Source{Origin: &m.File{Path: "path/a.go"}}},
-		{Source: m.Source{Origin: &m.File{Path: "path/a.go"}}},
-		{Source: m.Source{Origin: &m.File{Path: "path/b.go"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/other/a.go", Hash: "hash-a-2"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "b.go", FullPath: "path/b.go", Hash: "hash-b"}}},
 		{Source: m.Source{Origin: nil}},
 	}
 
@@ -31,12 +32,12 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 	output := buf.String()
 
 	for _, want := range []string{
-		"path/a.go",
-		"path/b.go",
+		"a.go",
+		"b.go",
 		"2",
 		"1",
-		"TOTAL FILES 2",
-		"4",
+		"TOTAL FILES 3",
+		"5",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)
@@ -80,7 +81,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	ui.DisplayConcurencyInfo(3, 1, 2)
 	ui.DusplayUpcomingTestsInfo(7)
 	ui.DisplayStartingTestInfo(m.Mutation{ID: 10, Type: m.MutationArithmetic}, 0)
-	ui.DisplayStartingTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{Path: "path/a.go"}}}, 0)
+	ui.DisplayStartingTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
 
 	result := m.Result{
 		m.MutationArithmetic: []struct {
@@ -97,7 +98,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 		"Running 2 mutations",
 		"Upcoming mutations: 7",
 		"Starting mutation 10 (arithmetic)",
-		"Starting mutation 11 (boolean) path/a.go",
+		"Starting mutation 11 (boolean) a.go",
 		"Completed mutation 10 (arithmetic) -> killed",
 		"Completed mutation 11 (boolean) -> unknown",
 	} {

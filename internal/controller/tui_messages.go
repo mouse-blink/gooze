@@ -4,7 +4,7 @@ package controller
 type estimationMsg struct {
 	total     int
 	paths     int
-	fileStats map[string]int
+	fileStats map[string]fileStat
 	err       error
 }
 
@@ -13,17 +13,24 @@ type upcomingMsg struct {
 }
 
 type startMutationMsg struct {
-	id     int
-	thread int
-	kind   interface{}
-	path   string
+	id          int
+	thread      int
+	kind        interface{}
+	fileHash    string
+	displayPath string
 }
 
 type completedMutationMsg struct {
-	id     int
-	kind   interface{}
-	path   string
-	status string
+	id          int
+	kind        interface{}
+	fileHash    string
+	displayPath string
+	status      string
+}
+
+type fileStat struct {
+	path  string
+	count int
 }
 
 type concurrencyMsg struct {

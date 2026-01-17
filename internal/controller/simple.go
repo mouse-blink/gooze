@@ -42,22 +42,32 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 		return err
 	}
 
-	info := make(map[string]int)
+	info := make(map[string]fileStat)
 
 	for _, mutation := range mutations {
 		if mutation.Source.Origin == nil {
 			continue
 		}
 
-		info[string(mutation.Source.Origin.Path)]++
+		fileHash := mutation.Source.Origin.Hash
+		if fileHash == "" {
+			fileHash = string(mutation.Source.Origin.ShortPath)
+		}
+
+		stat := info[fileHash]
+		stat.path = string(mutation.Source.Origin.ShortPath)
+		stat.count++
+		info[fileHash] = stat
 	}
 
-	pathsList := make([]string, 0, len(info))
-	for path := range info {
-		pathsList = append(pathsList, path)
+	statsList := make([]fileStat, 0, len(info))
+	for _, stat := range info {
+		statsList = append(statsList, stat)
 	}
 
-	sort.Strings(pathsList)
+	sort.Slice(statsList, func(i, j int) bool {
+		return statsList[i].path < statsList[j].path
+	})
 
 	var tableBuffer bytes.Buffer
 
@@ -69,9 +79,8 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 
 	pathsCount := 0
 
-	for _, pathStr := range pathsList {
-		count := info[pathStr]
-		table.Append([]string{pathStr, fmt.Sprintf("%d", count)})
+	for _, stat := range statsList {
+		table.Append([]string{stat.path, fmt.Sprintf("%d", stat.count)})
 
 		pathsCount++
 	}
@@ -101,7 +110,7 @@ func (s *SimpleUI) DusplayUpcomingTestsInfo(i int) {
 func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation, _ int) {
 	path := ""
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.Path)
+		path = string(currentMutation.Source.Origin.ShortPath)
 	}
 
 	s.printf("Starting mutation %d (%s) %s\n", currentMutation.ID, currentMutation.Type, path)

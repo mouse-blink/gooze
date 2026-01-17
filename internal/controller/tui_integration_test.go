@@ -32,9 +32,12 @@ func TestEstimateModelIntegration(t *testing.T) {
 
 	// Send estimation data
 	estMsg := estimationMsg{
-		total:     5,
-		paths:     2,
-		fileStats: map[string]int{"a.go": 3, "b.go": 2},
+		total: 5,
+		paths: 2,
+		fileStats: map[string]fileStat{
+			"hash-a": {path: "a.go", count: 3},
+			"hash-b": {path: "b.go", count: 2},
+		},
 	}
 	updated, _ = model.Update(estMsg)
 	model = updated.(estimateModel)
@@ -101,7 +104,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	model = updated.(testExecutionModel)
 
 	// Start a mutation
-	startMsg := startMutationMsg{id: 1, thread: 0, kind: m.MutationArithmetic, path: "test.go"}
+	startMsg := startMutationMsg{id: 1, thread: 0, kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go"}
 	updated, _ = model.Update(startMsg)
 	model = updated.(testExecutionModel)
 
@@ -112,7 +115,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	}
 
 	// Complete the mutation
-	completeMsg := completedMutationMsg{id: 1, kind: m.MutationArithmetic, path: "test.go", status: "killed"}
+	completeMsg := completedMutationMsg{id: 1, kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go", status: "killed"}
 	updated, _ = model.Update(completeMsg)
 	model = updated.(testExecutionModel)
 
@@ -130,7 +133,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 
 	// Complete remaining mutations to finish
 	for i := 2; i <= 10; i++ {
-		completeMsg := completedMutationMsg{id: i, kind: m.MutationBoolean, path: "test.go", status: "survived"}
+		completeMsg := completedMutationMsg{id: i, kind: m.MutationBoolean, fileHash: "hash-test", displayPath: "test.go", status: "survived"}
 		updated, _ = model.Update(completeMsg)
 		model = updated.(testExecutionModel)
 	}

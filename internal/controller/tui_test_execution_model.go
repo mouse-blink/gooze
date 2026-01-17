@@ -519,12 +519,12 @@ func truncateFile(text string, width int) string {
 }
 
 func (m testExecutionModel) handleStartMutation(msg startMutationMsg) testExecutionModel {
-	m.currentFile = msg.path
+	m.currentFile = msg.displayPath
 	m.currentMutationID = fmt.Sprintf("%d", msg.id)
 	m.currentType = fmt.Sprintf("%v", msg.kind)
 	m.currentStatus = "running"
 	// Track which file this thread is working on
-	m.threadFiles[msg.thread] = msg.path
+	m.threadFiles[msg.thread] = msg.displayPath
 	m.threadMutationIDs[msg.thread] = fmt.Sprintf("%d", msg.id)
 	m.rendered = true
 
@@ -536,7 +536,7 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 	m.currentStatus = msg.status
 	result := testResult{
 		id:     fmt.Sprintf("%d", msg.id),
-		file:   msg.path,
+		file:   msg.displayPath,
 		typ:    fmt.Sprintf("%v", msg.kind),
 		status: msg.status,
 	}

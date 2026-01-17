@@ -39,7 +39,7 @@ func TestAnimateScrollFileAndTruncateFile(t *testing.T) {
 
 func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 	m := newTestExecutionModel()
-	m = m.handleStartMutation(startMutationMsg{id: 5, thread: 1, kind: "arith", path: "path/a.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 5, thread: 1, kind: "arith", fileHash: "hash-a", displayPath: "path/a.go"})
 	if m.currentFile != "path/a.go" || m.currentMutationID != "5" || m.currentType != "arith" || !m.rendered {
 		t.Fatalf("handleStartMutation did not set state")
 	}
@@ -48,7 +48,7 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 	}
 
 	m.totalMutations = 1
-	m = m.handleCompletedMutation(completedMutationMsg{id: 5, kind: "arith", path: "path/a.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 5, kind: "arith", fileHash: "hash-a", displayPath: "path/a.go", status: "killed"})
 	if m.completedCount != 1 || m.progressPercent != 1 || !m.testingFinished {
 		t.Fatalf("handleCompletedMutation did not complete progress")
 	}
@@ -61,7 +61,7 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 
 	// when totalMutations is zero, progress should not update
 	m.totalMutations = 0
-	m = m.handleCompletedMutation(completedMutationMsg{id: 6, kind: "arith", path: "path/b.go", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 6, kind: "arith", fileHash: "hash-b", displayPath: "path/b.go", status: "survived"})
 	if m.progressPercent != 1 {
 		t.Fatalf("progressPercent = %v, want 1", m.progressPercent)
 	}
@@ -222,14 +222,14 @@ func TestTestExecutionModel_UpdateSwitch(t *testing.T) {
 	_, _ = m.Update(tea.WindowSizeMsg{Width: 50, Height: 10})
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	_, _ = m.Update(tickMsg(time.Now()))
-	model, _ := m.Update(startMutationMsg{id: 1, thread: 0, kind: "arith", path: "a.go"})
+	model, _ := m.Update(startMutationMsg{id: 1, thread: 0, kind: "arith", fileHash: "hash-a", displayPath: "a.go"})
 	m = model.(testExecutionModel)
 
 	if view := m.View(); !strings.Contains(view, "Gooze Mutation Testing") {
 		t.Fatalf("View after start should show testing")
 	}
 
-	_, _ = m.Update(completedMutationMsg{id: 1, kind: "arith", path: "test.go", status: "killed"})
+	_, _ = m.Update(completedMutationMsg{id: 1, kind: "arith", fileHash: "hash-test", displayPath: "test.go", status: "killed"})
 	_, _ = m.Update(concurrencyMsg{threads: 2, shardIndex: 1, shards: 3})
 	_, _ = m.Update(upcomingMsg{count: 10})
 	_, _ = m.Update(estimationMsg{})
@@ -252,10 +252,10 @@ func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
 	m.threadMutationIDs = make(map[int]string)
 
 	// Simulate 4 mutations starting in parallel on different threads
-	m = m.handleStartMutation(startMutationMsg{id: 0, thread: 0, kind: "arith", path: "file1.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 1, thread: 1, kind: "bool", path: "file2.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 2, thread: 2, kind: "comp", path: "file3.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 3, thread: 3, kind: "logic", path: "file4.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 0, thread: 0, kind: "arith", fileHash: "hash-1", displayPath: "file1.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 1, thread: 1, kind: "bool", fileHash: "hash-2", displayPath: "file2.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 2, thread: 2, kind: "comp", fileHash: "hash-3", displayPath: "file3.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 3, thread: 3, kind: "logic", fileHash: "hash-4", displayPath: "file4.go"})
 
 	// Verify each thread is tracking the correct mutation ID
 	if m.threadMutationIDs[0] != "0" {
@@ -272,10 +272,10 @@ func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
 	}
 
 	// Simulate mutations completing in a different order (2, 0, 3, 1)
-	m = m.handleCompletedMutation(completedMutationMsg{id: 2, kind: "comp", path: "file3.go", status: "killed"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 0, kind: "arith", path: "file1.go", status: "survived"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 3, kind: "logic", path: "file4.go", status: "killed"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 1, kind: "bool", path: "file2.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 2, kind: "comp", fileHash: "hash-3", displayPath: "file3.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 0, kind: "arith", fileHash: "hash-1", displayPath: "file1.go", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 3, kind: "logic", fileHash: "hash-4", displayPath: "file4.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 1, kind: "bool", fileHash: "hash-2", displayPath: "file2.go", status: "killed"})
 
 	// Verify all results were recorded with correct IDs
 	if len(m.results) != 4 {

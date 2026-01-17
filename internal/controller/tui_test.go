@@ -105,7 +105,7 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 	}
 
 	muts := []m.Mutation{
-		{Source: m.Source{Origin: &m.File{Path: "a.go"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
 		{Source: m.Source{Origin: nil}},
 	}
 	if err := tui.DisplayEstimation(muts, nil); err != nil {
@@ -123,7 +123,7 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 var errSentinel = errors.New("boom")
 
 func mutationWithOrigin() m.Mutation {
-	return m.Mutation{ID: 1, Type: m.MutationArithmetic, Source: m.Source{Origin: &m.File{Path: "path/a.go"}}}
+	return m.Mutation{ID: 1, Type: m.MutationArithmetic, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}}
 }
 
 func mutationWithoutOrigin() m.Mutation {

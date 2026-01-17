@@ -108,14 +108,22 @@ func (t *TUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 		return err
 	}
 
-	fileStats := make(map[string]int)
+	fileStats := make(map[string]fileStat)
 
 	for _, mutation := range mutations {
 		if mutation.Source.Origin == nil {
 			continue
 		}
 
-		fileStats[string(mutation.Source.Origin.Path)]++
+		fileHash := mutation.Source.Origin.Hash
+		if fileHash == "" {
+			fileHash = string(mutation.Source.Origin.ShortPath)
+		}
+
+		stat := fileStats[fileHash]
+		stat.path = string(mutation.Source.Origin.ShortPath)
+		stat.count++
+		fileStats[fileHash] = stat
 	}
 
 	t.send(estimationMsg{
@@ -146,15 +154,19 @@ func (t *TUI) DisplayStartingTestInfo(currentMutation m.Mutation, threadID int) 
 	t.ensureStarted()
 
 	path := ""
+	fileHash := ""
+
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.Path)
+		path = string(currentMutation.Source.Origin.ShortPath)
+		fileHash = currentMutation.Source.Origin.Hash
 	}
 
 	t.send(startMutationMsg{
-		id:     currentMutation.ID,
-		thread: threadID,
-		kind:   currentMutation.Type,
-		path:   path,
+		id:          currentMutation.ID,
+		thread:      threadID,
+		kind:        currentMutation.Type,
+		fileHash:    fileHash,
+		displayPath: path,
 	})
 }
 
@@ -168,15 +180,19 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 	}
 
 	path := ""
+	fileHash := ""
+
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.Path)
+		path = string(currentMutation.Source.Origin.ShortPath)
+		fileHash = currentMutation.Source.Origin.Hash
 	}
 
 	t.send(completedMutationMsg{
-		id:     currentMutation.ID,
-		kind:   currentMutation.Type,
-		path:   path,
-		status: status,
+		id:          currentMutation.ID,
+		kind:        currentMutation.Type,
+		fileHash:    fileHash,
+		displayPath: path,
+		status:      status,
 	})
 }
 

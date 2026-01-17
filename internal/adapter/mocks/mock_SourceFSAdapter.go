@@ -298,9 +298,15 @@ func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(model.
 	return _c
 }
 
-// Get provides a mock function with given fields: root
-func (_m *MockSourceFSAdapter) Get(root []model.Path) ([]model.Source, error) {
-	ret := _m.Called(root)
+// Get provides a mock function with given fields: root, ignore
+func (_m *MockSourceFSAdapter) Get(root []model.Path, ignore ...string) ([]model.Source, error) {
+	var _ca []interface{}
+	_ca = append(_ca, root)
+	for _i := range ignore {
+		_ca = append(_ca, ignore[_i])
+	}
+
+	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
@@ -308,19 +314,19 @@ func (_m *MockSourceFSAdapter) Get(root []model.Path) ([]model.Source, error) {
 
 	var r0 []model.Source
 	var r1 error
-	if rf, ok := ret.Get(0).(func([]model.Path) ([]model.Source, error)); ok {
-		return rf(root)
+	if rf, ok := ret.Get(0).(func([]model.Path, ...string) ([]model.Source, error)); ok {
+		return rf(root, ignore...)
 	}
-	if rf, ok := ret.Get(0).(func([]model.Path) []model.Source); ok {
-		r0 = rf(root)
+	if rf, ok := ret.Get(0).(func([]model.Path, ...string) []model.Source); ok {
+		r0 = rf(root, ignore...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]model.Source)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func([]model.Path) error); ok {
-		r1 = rf(root)
+	if rf, ok := ret.Get(1).(func([]model.Path, ...string) error); ok {
+		r1 = rf(root, ignore...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -335,13 +341,19 @@ type MockSourceFSAdapter_Get_Call struct {
 
 // Get is a helper method to define mock.On call
 //   - root []model.Path
-func (_e *MockSourceFSAdapter_Expecter) Get(root interface{}) *MockSourceFSAdapter_Get_Call {
-	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get", root)}
+//   - ignore ...string
+func (_e *MockSourceFSAdapter_Expecter) Get(root interface{}, ignore ...interface{}) *MockSourceFSAdapter_Get_Call {
+	_ca := append([]interface{}{root}, ignore...)
+	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get", _ca...)}
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path)) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path, ignore ...string)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]model.Path))
+		var _ca []string
+		for _i := 1; _i < len(args); _i++ {
+			_ca = append(_ca, args[_i].(string))
+		}
+		run(args[0].([]model.Path), _ca...)
 	})
 	return _c
 }
@@ -351,7 +363,7 @@ func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.Source, _a1 error) *M
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path, ...string) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }

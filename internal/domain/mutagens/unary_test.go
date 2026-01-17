@@ -52,7 +52,7 @@ func TestGenerateUnaryMutations(t *testing.T) {
 
 			source := m.Source{
 				Origin: &m.File{
-					Path: "test.go",
+					FullPath: "test.go",
 				},
 			}
 

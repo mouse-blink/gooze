@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	m "github.com/mouse-blink/gooze/internal/model"
@@ -21,7 +23,7 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
-	Get(root []m.Path) ([]m.Source, error)
+	Get(root []m.Path, ignore ...string) ([]m.Source, error)
 
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
@@ -80,48 +82,57 @@ func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 }
 
 // Get collects Go source files for the provided roots and returns SourceV2 entries.
-func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.Source, error) {
+func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source, error) {
 	if len(roots) == 0 {
 		return []m.Source{}, nil
+	}
+
+	ignoreRegexps, err := compileIgnoreRegexps(ignore)
+	if err != nil {
+		return nil, err
 	}
 
 	seen := make(map[string]struct{})
 	sources := make([]m.Source, 0, len(roots))
 
 	for _, root := range roots {
-		rootPath, recursive, err := normalizeRootPath(string(root))
-		if err != nil {
-			return nil, err
-		}
-
-		info, err := a.FileInfo(m.Path(rootPath))
-		if err != nil {
-			return nil, fmt.Errorf("root path error: %w", err)
-		}
-
-		if !info.IsDir() {
-			source, ok, err := a.processFilePath(rootPath)
-			if err != nil {
-				if isInvalidSourceErr(err) {
-					continue
-				}
-
-				return nil, err
-			}
-
-			if ok {
-				addSourceIfNew(&sources, seen, source)
-			}
-
-			continue
-		}
-
-		if err := a.collectSourcesFromDir(rootPath, recursive, seen, &sources); err != nil {
+		if err := a.collectSourcesFromRoot(root, ignoreRegexps, seen, &sources); err != nil {
 			return nil, err
 		}
 	}
 
 	return sources, nil
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+	rootPath, recursive, err := normalizeRootPath(string(root))
+	if err != nil {
+		return err
+	}
+
+	info, err := a.FileInfo(m.Path(rootPath))
+	if err != nil {
+		return fmt.Errorf("root path error: %w", err)
+	}
+
+	if !info.IsDir() {
+		source, ok, err := a.processFilePath(rootPath, ignoreRegexps)
+		if err != nil {
+			if isInvalidSourceErr(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		if ok {
+			addSourceIfNew(sources, seen, source)
+		}
+
+		return nil
+	}
+
+	return a.collectSourcesFromDir(rootPath, recursive, ignoreRegexps, seen, sources)
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
@@ -313,15 +324,15 @@ func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Sour
 		return
 	}
 
-	if _, exists := seen[string(source.Origin.Path)]; exists {
+	if _, exists := seen[string(source.Origin.FullPath)]; exists {
 		return
 	}
 
-	seen[string(source.Origin.Path)] = struct{}{}
+	seen[string(source.Origin.FullPath)] = struct{}{}
 	*sources = append(*sources, source)
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, seen map[string]struct{}, sources *[]m.Source) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
 	return a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -331,7 +342,7 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive 
 			return nil
 		}
 
-		source, ok, err := a.processFilePath(path)
+		source, ok, err := a.processFilePath(path, ignoreRegexps)
 		if err != nil {
 			if isInvalidSourceErr(err) {
 				return nil
@@ -384,44 +395,45 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, error) {
-	if filepath.Ext(path) != ".go" {
+func (a *LocalSourceFSAdapter) processFilePath(path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
+	if !isCandidateSourcePath(path, ignoreRegexps) {
 		return m.Source{}, false, nil
+	}
+
+	return a.buildSourceFromPath(path, ignoreRegexps)
+}
+
+func isCandidateSourcePath(path string, ignoreRegexps []*regexp.Regexp) bool {
+	if filepath.Ext(path) != ".go" {
+		return false
 	}
 
 	if strings.HasSuffix(path, "_test.go") {
-		return m.Source{}, false, nil
+		return false
 	}
 
+	return !shouldIgnorePath(path, ignoreRegexps)
+}
+
+func (a *LocalSourceFSAdapter) buildSourceFromPath(path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return m.Source{}, false, err
 	}
 
-	src, err := a.ReadFile(m.Path(absPath))
-	if err != nil {
-		return m.Source{}, false, fmt.Errorf("%w: read source file: %w", errInvalidSource, err)
-	}
+	projectRoot, rootErr := a.FindProjectRoot(m.Path(absPath))
 
-	fset := token.NewFileSet()
-
-	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
-	if err != nil {
-		return m.Source{}, false, fmt.Errorf("%w: parse source file: %w", errInvalidSource, err)
-	}
-
-	if file.Name == nil {
-		return m.Source{}, false, fmt.Errorf("%w: missing package name", errInvalidSource)
-	}
-
-	originHash, err := a.HashFile(m.Path(absPath))
+	file, err := a.readAndParseSource(absPath)
 	if err != nil {
 		return m.Source{}, false, err
 	}
 
-	origin := &m.File{Path: m.Path(absPath), Hash: originHash}
+	origin, err := a.buildOriginFile(absPath, projectRoot, rootErr)
+	if err != nil {
+		return m.Source{}, false, err
+	}
 
-	testFile := a.detectTestFile(m.Path(absPath))
+	testFile := a.detectTestFile(m.Path(absPath), projectRoot, ignoreRegexps)
 
 	packageName := file.Name.Name
 
@@ -432,33 +444,147 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, err
 	}, true, nil
 }
 
-func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path) *m.File {
-	testPath, err := a.DetectTestFile(sourcePath)
-	if err != nil || testPath == "" {
+func (a *LocalSourceFSAdapter) readAndParseSource(absPath string) (*ast.File, error) {
+	src, err := a.ReadFile(m.Path(absPath))
+	if err != nil {
+		return nil, fmt.Errorf("%w: read source file: %w", errInvalidSource, err)
+	}
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
+	if err != nil {
+		return nil, fmt.Errorf("%w: parse source file: %w", errInvalidSource, err)
+	}
+
+	if file.Name == nil {
+		return nil, fmt.Errorf("%w: missing package name", errInvalidSource)
+	}
+
+	return file, nil
+}
+
+func (a *LocalSourceFSAdapter) buildOriginFile(absPath string, projectRoot m.Path, rootErr error) (*m.File, error) {
+	originHash, err := a.HashFile(m.Path(absPath))
+	if err != nil {
+		return nil, err
+	}
+
+	origin := &m.File{FullPath: m.Path(absPath), Hash: originHash}
+	if rootErr == nil {
+		if relPath, err := a.RelPath(projectRoot, m.Path(absPath)); err == nil {
+			origin.ShortPath = relPath
+		}
+	}
+
+	return origin, nil
+}
+
+func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path, projectRoot m.Path, ignoreRegexps []*regexp.Regexp) *m.File {
+	testPath := a.resolveTestPath(sourcePath, ignoreRegexps)
+	if testPath == "" {
 		return nil
 	}
 
-	testSrc, err := a.ReadFile(testPath)
+	file, err := a.buildTestFile(testPath, projectRoot)
 	if err != nil {
 		return nil
 	}
 
-	testFset := token.NewFileSet()
+	return file
+}
 
-	testAST, err := parser.ParseFile(testFset, string(testPath), testSrc, parser.AllErrors)
-	if err != nil || testAST == nil || testAST.Name == nil {
-		return nil
+func (a *LocalSourceFSAdapter) resolveTestPath(sourcePath m.Path, ignoreRegexps []*regexp.Regexp) m.Path {
+	testPath, err := a.DetectTestFile(sourcePath)
+	if err != nil || testPath == "" {
+		return ""
+	}
+
+	if shouldIgnorePath(string(testPath), ignoreRegexps) {
+		return ""
+	}
+
+	return testPath
+}
+
+func (a *LocalSourceFSAdapter) buildTestFile(testPath m.Path, projectRoot m.Path) (*m.File, error) {
+	if err := a.validateGoFile(testPath); err != nil {
+		return nil, err
 	}
 
 	testHash, err := a.HashFile(testPath)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return &m.File{Path: testPath, Hash: testHash}
+	file := &m.File{FullPath: testPath, Hash: testHash}
+	if projectRoot != "" {
+		if relPath, err := a.RelPath(projectRoot, testPath); err == nil {
+			file.ShortPath = relPath
+		}
+	}
+
+	return file, nil
+}
+
+func (a *LocalSourceFSAdapter) validateGoFile(path m.Path) error {
+	src, err := a.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, string(path), src, parser.AllErrors)
+	if err != nil {
+		return err
+	}
+
+	if file == nil || file.Name == nil {
+		return fmt.Errorf("invalid go file")
+	}
+
+	return nil
 }
 
 var errInvalidSource = errors.New("invalid source file")
+
+func compileIgnoreRegexps(patterns []string) ([]*regexp.Regexp, error) {
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+
+	regexps := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		if pattern == "" {
+			continue
+		}
+
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ignore pattern %q: %w", pattern, err)
+		}
+
+		regexps = append(regexps, re)
+	}
+
+	return regexps, nil
+}
+
+func shouldIgnorePath(path string, ignoreRegexps []*regexp.Regexp) bool {
+	if len(ignoreRegexps) == 0 {
+		return false
+	}
+
+	base := filepath.Base(path)
+	for _, re := range ignoreRegexps {
+		if re.MatchString(path) || re.MatchString(base) {
+			return true
+		}
+	}
+
+	return false
+}
 
 func isInvalidSourceErr(err error) bool {
 	return errors.Is(err, errInvalidSource)

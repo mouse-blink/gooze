@@ -60,7 +60,7 @@ func (mg *mutagen) GenerateMutation(source m.Source, startingIndex int, mutation
 }
 
 func validateSource(source m.Source) error {
-	if source.Origin == nil || source.Origin.Path == "" {
+	if source.Origin == nil || source.Origin.FullPath == "" {
 		return fmt.Errorf("missing source origin")
 	}
 
@@ -90,16 +90,16 @@ func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, err
 }
 
 func (mg *mutagen) loadSourceAST(source m.Source) ([]byte, *token.FileSet, *ast.File, error) {
-	content, err := mg.ReadFile(source.Origin.Path)
+	content, err := mg.ReadFile(source.Origin.FullPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read %s: %w", source.Origin.Path, err)
+		return nil, nil, nil, fmt.Errorf("failed to read %s: %w", source.Origin.FullPath, err)
 	}
 
 	fset := token.NewFileSet()
 
-	file, err := mg.Parse(fset, string(source.Origin.Path), content)
+	file, err := mg.Parse(fset, string(source.Origin.FullPath), content)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse %s: %w", source.Origin.Path, err)
+		return nil, nil, nil, fmt.Errorf("failed to parse %s: %w", source.Origin.FullPath, err)
 	}
 
 	return content, fset, file, nil

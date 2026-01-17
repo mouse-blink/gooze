@@ -22,8 +22,9 @@ const (
 
 // File represents a source code file.
 type File struct {
-	Path Path
-	Hash string
+	ShortPath Path
+	FullPath  Path
+	Hash      string
 }
 
 // Source represents a pair of source and test files along with their package name.

@@ -37,7 +37,7 @@ func (to *orchestrator) TestMutation(mutation m.Mutation) (m.Result, error) {
 		return to.resultForNoTest(mutation), nil
 	}
 
-	projectRoot, tmpDir, err := to.prepareWorkspace(mutation.Source.Origin.Path)
+	projectRoot, tmpDir, err := to.prepareWorkspace(mutation.Source.Origin.FullPath)
 	if tmpDir != "" {
 		defer to.cleanupTempDir(tmpDir)
 	}
@@ -46,7 +46,7 @@ func (to *orchestrator) TestMutation(mutation m.Mutation) (m.Result, error) {
 		return m.Result{}, err
 	}
 
-	tmpSourcePath, err := to.buildTempSourcePath(projectRoot, tmpDir, mutation.Source.Origin.Path)
+	tmpSourcePath, err := to.buildTempSourcePath(projectRoot, tmpDir, mutation.Source.Origin.FullPath)
 	if err != nil {
 		return m.Result{}, err
 	}
@@ -55,7 +55,7 @@ func (to *orchestrator) TestMutation(mutation m.Mutation) (m.Result, error) {
 		return m.Result{}, err
 	}
 
-	tmpTestPath, err := to.buildTempTestPath(projectRoot, tmpDir, mutation.Source.Test.Path)
+	tmpTestPath, err := to.buildTempTestPath(projectRoot, tmpDir, mutation.Source.Test.FullPath)
 	if err != nil {
 		return m.Result{}, err
 	}

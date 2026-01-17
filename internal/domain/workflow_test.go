@@ -24,8 +24,8 @@ func TestWorkflow_Test_Success(t *testing.T) {
 
 	sources := []m.Source{
 		{
-			Origin: &m.File{Path: "test.go", Hash: "hash1"},
-			Test:   &m.File{Path: "test_test.go", Hash: "test_hash1"},
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -40,7 +40,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Once()
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
@@ -79,7 +79,7 @@ func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
 	mockUI.EXPECT().Close().Return().Once()
 	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(nil, testErr)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(nil, testErr)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
@@ -106,14 +106,14 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	sources := []m.Source{
-		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	testErr := errors.New("failed to generate mutations")
 	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
 	mockUI.EXPECT().Close().Return().Once()
 	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(nil, testErr)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
@@ -141,7 +141,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	sources := []m.Source{
-		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
@@ -154,7 +154,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(nil, testErr)
 
@@ -186,7 +186,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	sources := []m.Source{
-		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
@@ -199,7 +199,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Once()
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil)
 
@@ -234,7 +234,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	sources := []m.Source{
-		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	// No mutations generated
@@ -243,7 +243,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockUI.EXPECT().Close().Return().Once()
 	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return([]m.Mutation{}, nil)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
 		return len(reports) == 0
@@ -279,7 +279,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	source := m.Source{
-		Origin: &m.File{Path: "test.go", Hash: "hash1"},
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
 	}
 	sources := []m.Source{source}
 
@@ -296,7 +296,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Times(3)
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(3)
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)
 	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
@@ -331,7 +331,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	source := m.Source{
-		Origin: &m.File{Path: "test.go", Hash: "hash1"},
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	// 6 mutations total
@@ -351,7 +351,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Times(2)
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	// Only 2 mutations should be tested (IDs 0 and 3, since shardIndex=0, totalShards=3)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
@@ -387,10 +387,10 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	source1 := m.Source{
-		Origin: &m.File{Path: "file1.go", Hash: "hash1"},
+		Origin: &m.File{FullPath: "file1.go", Hash: "hash1"},
 	}
 	source2 := m.Source{
-		Origin: &m.File{Path: "file2.go", Hash: "hash2"},
+		Origin: &m.File{FullPath: "file2.go", Hash: "hash2"},
 	}
 
 	mutations1 := []m.Mutation{
@@ -408,7 +408,7 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Times(3)
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(3)
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source1, source2}, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source1, source2}, nil)
 	mockMutagen.EXPECT().GenerateMutation(source1, 0, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations1, nil)
 	mockMutagen.EXPECT().GenerateMutation(source2, 2, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations2, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)

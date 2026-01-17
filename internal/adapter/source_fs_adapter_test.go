@@ -241,6 +241,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		mustMkdir(t, nestedDir)
 		nestedPath := filepath.Join(nestedDir, "child.go")
 		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), nestedPath)
+		writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/project\n")
 
 		wd, err := os.Getwd()
 		require.NoError(t, err)
@@ -255,7 +256,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		source := findSourceV2ByOrigin(sources, mainPath)
 		require.NotNilf(t, source, "Get() did not include %s", mainPath)
 
-		assertSourceV2(t, source, mainPath, mainContent, "main", testPath, testContent)
+		assertSourceV2(t, source, mainPath, "main.go", mainContent, "main", testPath, "main_test.go", testContent)
 
 		assert.Nil(t, findSourceV2ByOrigin(sources, nestedPath), "Get() unexpectedly included nested file for '.'")
 
@@ -276,7 +277,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		source := findSourceV2ByOrigin(sources, mainPath)
 		require.NotNilf(t, source, "Get() did not include %s", mainPath)
 
-		assertSourceV2(t, source, mainPath, mainContent, "main", "", nil)
+		assertSourceV2(t, source, mainPath, "", mainContent, "main", "", "", nil)
 	})
 
 	t.Run("parent directory path resolves", func(t *testing.T) {
@@ -299,7 +300,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		source := findSourceV2ByOrigin(sources, parentPath)
 		require.NotNilf(t, source, "Get() did not include %s", parentPath)
 
-		assertSourceV2(t, source, parentPath, parentContent, "main", "", nil)
+		assertSourceV2(t, source, parentPath, "", parentContent, "main", "", "", nil)
 	})
 
 	t.Run("go style recursive path includes nested", func(t *testing.T) {
@@ -323,12 +324,12 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, err)
 		mainSource := findSourceV2ByOrigin(sources, mainPath)
 		require.NotNilf(t, mainSource, "Get() did not include %s", mainPath)
-		assertSourceV2(t, mainSource, mainPath, mainContent, "main", "", nil)
+		assertSourceV2(t, mainSource, mainPath, "", mainContent, "main", "", "", nil)
 
 		nestedSource := findSourceV2ByOrigin(sources, nestedPath)
 		require.NotNil(t, nestedSource, "Get() did not include nested file for ./...")
 
-		assertSourceV2(t, nestedSource, nestedPath, nestedContent, "sub", "", nil)
+		assertSourceV2(t, nestedSource, nestedPath, "", nestedContent, "sub", "", "", nil)
 	})
 
 	t.Run("explicit nested path includes child file", func(t *testing.T) {
@@ -349,7 +350,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 
 		childSource := findSourceV2ByOrigin(sources, childPath)
 		require.NotNil(t, childSource, "Get() did not include nested child for ./nested/...")
-		assertSourceV2(t, childSource, childPath, childContent, "sub", "", nil)
+		assertSourceV2(t, childSource, childPath, "", childContent, "sub", "", "", nil)
 	})
 
 	t.Run("returns error for missing root", func(t *testing.T) {
@@ -370,7 +371,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
-		assertSourceV2(t, &sources[0], mainPath, mainContent, "main", testPath, testContent)
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", testPath, "", testContent)
 	})
 
 	t.Run("test file input yields no sources", func(t *testing.T) {
@@ -403,7 +404,22 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
-		assertSourceV2(t, &sources[0], mainPath, mainContent, "main", "", nil)
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", "", "", nil)
+	})
+
+	t.Run("ignore regex excludes matching files", func(t *testing.T) {
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/project\n")
+		ignoredPath := filepath.Join(root, "mick_skip.go")
+		keptPath := filepath.Join(root, "keep.go")
+		writeTestFile(t, ignoredPath, "package main\n")
+		writeTestFile(t, keptPath, "package main\n")
+
+		sources, err := adapter.Get([]m.Path{m.Path(root)}, "^mick_")
+		require.NoError(t, err)
+		require.Len(t, sources, 1)
+
+		assert.Equal(t, m.Path(keptPath), sources[0].Origin.FullPath)
 	})
 
 	t.Run("broken source files are skipped", func(t *testing.T) {
@@ -428,7 +444,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.Len(t, sources, 1)
 
 		if assert.NotNil(t, sources[0].Origin) {
-			assert.Equal(t, m.Path(sourcePath), sources[0].Origin.Path)
+			assert.Equal(t, m.Path(sourcePath), sources[0].Origin.FullPath)
 		}
 		assert.Nil(t, sources[0].Test)
 	})
@@ -468,7 +484,7 @@ func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {
 		if sources[i].Origin == nil {
 			continue
 		}
-		if string(sources[i].Origin.Path) == origin {
+		if string(sources[i].Origin.FullPath) == origin {
 			return &sources[i]
 		}
 	}
@@ -476,7 +492,7 @@ func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {
 	return nil
 }
 
-func assertSourceV2(t *testing.T, source *m.Source, originPath string, originContent []byte, pkg string, testPath string, testContent []byte) {
+func assertSourceV2(t *testing.T, source *m.Source, originPath string, originShort string, originContent []byte, pkg string, testPath string, testShort string, testContent []byte) {
 	t.Helper()
 
 	if source == nil {
@@ -487,7 +503,8 @@ func assertSourceV2(t *testing.T, source *m.Source, originPath string, originCon
 		require.Fail(t, "Origin is nil")
 	}
 
-	assert.Equal(t, m.Path(originPath), source.Origin.Path)
+	assert.Equal(t, m.Path(originPath), source.Origin.FullPath)
+	assert.Equal(t, m.Path(originShort), source.Origin.ShortPath)
 	assert.Equal(t, hashBytes(originContent), source.Origin.Hash)
 	if assert.NotNil(t, source.Package) {
 		assert.Equal(t, pkg, *source.Package)
@@ -499,7 +516,8 @@ func assertSourceV2(t *testing.T, source *m.Source, originPath string, originCon
 	}
 
 	if assert.NotNil(t, source.Test) {
-		assert.Equal(t, m.Path(testPath), source.Test.Path)
+		assert.Equal(t, m.Path(testPath), source.Test.FullPath)
+		assert.Equal(t, m.Path(testShort), source.Test.ShortPath)
 		assert.Equal(t, hashBytes(testContent), source.Test.Hash)
 	}
 }
