@@ -2,241 +2,365 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
-	"time"
+
+	controllermocks "github.com/mouse-blink/gooze/internal/controller/mocks"
+	"github.com/mouse-blink/gooze/internal/domain"
+	domainmocks "github.com/mouse-blink/gooze/internal/domain/mocks"
+	m "github.com/mouse-blink/gooze/internal/model"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/mock"
 )
 
-func TestListCommand(t *testing.T) {
-	t.Run("list flag shows mutation counts", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"--list", "../examples/basic"})
+func TestRootCmd_ListFlag(t *testing.T) {
+	// Setup mocks
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockUI := controllermocks.NewMockUI(t)
 
-		var out bytes.Buffer
-		cmd.SetOut(&out)
+	// Create a new root command for testing
+	cmd := newRootCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
 
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
-		}
+	// Override the global workflow
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
 
-		output := out.String()
-		if !strings.Contains(output, "main.go") {
-			t.Errorf("expected output to contain main.go, got: %s", output)
-		}
-		if !strings.Contains(output, "mutations") {
-			t.Errorf("expected output to contain mutation count, got: %s", output)
-		}
-	})
+	// Set expectations
+	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
+		return args.UseCache == true
+	})).Return(nil)
 
-	t.Run("short flag -l works", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"-l", "../examples/basic"})
+	// Execute command with --list flag
+	cmd.SetArgs([]string{"--list", "./..."})
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
 
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
-		}
-
-		output := out.String()
-		if !strings.Contains(output, "main.go") {
-			t.Errorf("expected output to contain main.go, got: %s", output)
-		}
-	})
-
-	t.Run("default argument uses current directory", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"-l"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
-		}
-
-		// Should not error when no path specified
-		output := out.String()
-		if output == "" {
-			t.Errorf("expected some output for current directory")
-		}
-	})
-
-	t.Run("list with nonexistent path returns error", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"-l", "/nonexistent/path"})
-
-		err := cmd.Execute()
-		if err == nil {
-			t.Fatalf("expected error for nonexistent path")
-		}
-	})
-
-	t.Run("list flag shows boolean mutation counts", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"--list", "../examples/boolean"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
-		}
-
-		output := out.String()
-		if !strings.Contains(output, "main.go") {
-			t.Errorf("expected output to contain main.go, got: %s", output)
-		}
-		// Must contain boolean mutation type reporting
-		if !strings.Contains(output, "boolean") {
-			t.Fatalf("expected output to contain 'boolean' mutation type, got: %s", output)
-		}
-		// Should NOT show 0 boolean mutations (examples/boolean has true/false literals)
-		if strings.Contains(output, "0 boolean mutations") || !strings.Contains(output, "boolean mutations") {
-			t.Fatalf("expected non-zero boolean mutations for examples/boolean, got: %s", output)
-		}
-	})
-
-	t.Run("list flag shows both arithmetic and boolean mutations", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"--list", "../examples/scopes"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
-		}
-
-		output := out.String()
-		// scopes example has arithmetic operators
-		if !strings.Contains(output, "arithmetic") {
-			t.Errorf("expected output to contain 'arithmetic' mutation type, got: %s", output)
-		}
-		// Should also report boolean mutations
-		if !strings.Contains(output, "boolean") {
-			t.Errorf("expected output to contain 'boolean' mutation type, got: %s", output)
-		}
-	})
+	mockWorkflow.AssertExpectations(t)
+	mockUI.AssertExpectations(t)
 }
 
-func TestDefaultCommand(t *testing.T) {
-	t.Run("default behavior runs mutations on basic example", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"../examples/basic"})
+func TestRootCmd_TestMode(t *testing.T) {
+	// Setup mocks
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
 
-		var out bytes.Buffer
-		cmd.SetOut(&out)
+	// Create a new root command for testing
+	cmd := newRootCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
 
-		// Run with timeout since mutation testing can take time
-		done := make(chan error, 1)
-		go func() {
-			done <- cmd.Execute()
-		}()
+	// Override the global workflow
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
 
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("Execute error: %v", err)
+	// Set expectations
+	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Threads == 2 &&
+			args.ShardIndex == 0 &&
+			args.TotalShardCount == 1 &&
+			args.Reports == m.Path(".gooze-reports")
+	})).Return(nil)
+
+	// Execute command without --list flag
+	cmd.SetArgs([]string{"--parallel", "2", "./..."})
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestRootCmd_WithSharding(t *testing.T) {
+	// Setup mocks
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	// Create a new root command for testing
+	cmd := newRootCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	// Override the global workflow
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	// Set expectations for shard 1/3
+	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.ShardIndex == 1 && args.TotalShardCount == 3
+	})).Return(nil)
+
+	// Execute command with sharding
+	cmd.SetArgs([]string{"--shard", "1/3", "./..."})
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestRootCmd_MultiplePaths(t *testing.T) {
+	// Setup mocks
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	// Create a new root command for testing
+	cmd := newRootCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	// Override the global workflow
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	// Set expectations
+	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
+		return len(args.Paths) == 3 &&
+			args.Paths[0] == m.Path("./cmd") &&
+			args.Paths[1] == m.Path("./pkg") &&
+			args.Paths[2] == m.Path("./internal")
+	})).Return(nil)
+
+	// Execute command with multiple paths
+	cmd.SetArgs([]string{"./cmd", "./pkg", "./internal"})
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestParseShardFlag(t *testing.T) {
+	tests := []struct {
+		name      string
+		shard     string
+		wantIndex int
+		wantTotal int
+	}{
+		{"empty string", "", 0, 1},
+		{"valid 0/3", "0/3", 0, 3},
+		{"valid 1/3", "1/3", 1, 3},
+		{"valid 2/3", "2/3", 2, 3},
+		{"invalid format", "invalid", 0, 1},
+		{"zero total", "0/0", 0, 1},
+		{"negative total", "0/-1", 0, 1},
+		{"negative index", "-1/3", 0, 1},
+		{"index >= total", "3/3", 0, 1},
+		{"index > total", "5/3", 0, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotIndex, gotTotal := parseShardFlag(tt.shard)
+			if gotIndex != tt.wantIndex {
+				t.Errorf("parseShardFlag() index = %v, want %v", gotIndex, tt.wantIndex)
 			}
-		case <-time.After(30 * time.Second):
-			t.Fatal("command timed out after 30s")
-		}
-
-		output := out.String()
-		// Should show mutation testing output
-		if !strings.Contains(output, "main.go") {
-			t.Errorf("expected output to contain main.go, got: %s", output)
-		}
-		// Should have mutation results (killed or survived)
-		if !strings.Contains(output, "killed") && !strings.Contains(output, "survived") {
-			t.Errorf("expected output to contain mutation results, got: %s", output)
-		}
-	})
-
-	t.Run("runs mutations on small example directory", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"../examples/basic"}) // Use small example instead of current directory
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		done := make(chan error, 1)
-		go func() {
-			done <- cmd.Execute()
-		}()
-
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("Execute error: %v", err)
+			if gotTotal != tt.wantTotal {
+				t.Errorf("parseShardFlag() total = %v, want %v", gotTotal, tt.wantTotal)
 			}
-		case <-time.After(30 * time.Second):
-			t.Fatal("command timed out after 30s")
+		})
+	}
+}
+
+func TestNewRootCmd(t *testing.T) {
+	cmd := newRootCmd()
+	if cmd.Use != "gooze [paths...]" {
+		t.Errorf("newRootCmd() Use = %v, want %v", cmd.Use, "gooze [paths...]")
+	}
+	if cmd.Short == "" {
+		t.Error("newRootCmd() Short should not be empty")
+	}
+	if cmd.Long == "" {
+		t.Error("newRootCmd() Long should not be empty")
+	}
+
+	// Check flags
+	listFlag := cmd.Flags().Lookup("list")
+	if listFlag == nil {
+		t.Error("newRootCmd() missing --list flag")
+	}
+	parallelFlag := cmd.Flags().Lookup("parallel")
+	if parallelFlag == nil {
+		t.Error("newRootCmd() missing --parallel flag")
+	}
+	shardFlag := cmd.Flags().Lookup("shard")
+	if shardFlag == nil {
+		t.Error("newRootCmd() missing --shard flag")
+	}
+}
+
+func TestInit(t *testing.T) {
+	// Test that init() created all the necessary instances
+	if ui == nil {
+		t.Error("init() ui is nil")
+	}
+	if goFileAdapter == nil {
+		t.Error("init() goFileAdapter is nil")
+	}
+	if soirceFSAdapter == nil {
+		t.Error("init() soirceFSAdapter is nil")
+	}
+	if reportStore == nil {
+		t.Error("init() reportStore is nil")
+	}
+	if fsAdapter == nil {
+		t.Error("init() fsAdapter is nil")
+	}
+	if testAdapter == nil {
+		t.Error("init() testAdapter is nil")
+	}
+	if orchestrator == nil {
+		t.Error("init() orchestrator is nil")
+	}
+	if mutagen == nil {
+		t.Error("init() mutagen is nil")
+	}
+	if workflow == nil {
+		t.Error("init() workflow is nil")
+	}
+}
+
+func TestExecute(t *testing.T) {
+	// Save original rootCmd
+	originalRootCmd := rootCmd
+
+	// Create a mock command that succeeds
+	mockCmd := &cobra.Command{
+		Use: "test",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+	mockCmd.SetOut(&bytes.Buffer{})
+	mockCmd.SetErr(&bytes.Buffer{})
+
+	rootCmd = mockCmd
+
+	// Execute should not panic or exit
+	// We can't easily test os.Exit, but we can verify no error path
+	Execute()
+
+	// Restore
+	rootCmd = originalRootCmd
+}
+
+func TestExecute_WithError(t *testing.T) {
+	// Save original rootCmd
+	originalRootCmd := rootCmd
+	defer func() {
+		rootCmd = originalRootCmd
+	}()
+
+	// Create a mock command that fails
+	mockCmd := &cobra.Command{
+		Use: "test",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fmt.Errorf("command failed")
+		},
+	}
+	mockCmd.SetOut(&bytes.Buffer{})
+	mockCmd.SetErr(&bytes.Buffer{})
+
+	rootCmd = mockCmd
+
+	// This will cause os.Exit(1) to be called, which we can't intercept
+	// So we just verify the command itself errors
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("Expected command to return an error")
+	}
+}
+
+func TestExecute_ProcessLevel_Success(t *testing.T) {
+	if os.Getenv("TEST_EXECUTE_SUBPROCESS") == "1" {
+		// This runs in the subprocess
+		// Mock successful command
+		originalRootCmd := rootCmd
+		mockCmd := &cobra.Command{
+			Use: "test",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Println("success")
+				return nil
+			},
 		}
+		mockCmd.SetOut(os.Stdout)
+		mockCmd.SetErr(os.Stderr)
+		rootCmd = mockCmd
+		defer func() { rootCmd = originalRootCmd }()
 
-		output := out.String()
-		// Should have some output
-		if output == "" {
-			t.Errorf("expected some output, got empty")
+		Execute()
+		return
+	}
+
+	// Parent process: spawn subprocess
+	cmd := exec.Command(os.Args[0], "-test.run=TestExecute_ProcessLevel_Success")
+	cmd.Env = append(os.Environ(), "TEST_EXECUTE_SUBPROCESS=1")
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Errorf("Process exited with error: %v, output: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "success") {
+		t.Errorf("Expected 'success' in output, got: %s", output)
+	}
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr.ExitCode() != 0 {
+			t.Errorf("Expected exit code 0, got %d", exitErr.ExitCode())
 		}
-	})
+	}
+}
 
-	t.Run("handles path with no mutations gracefully", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"../examples/nofunc"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("Execute error: %v", err)
+func TestExecute_ProcessLevel_Failure(t *testing.T) {
+	if os.Getenv("TEST_EXECUTE_SUBPROCESS_FAIL") == "1" {
+		// This runs in the subprocess
+		// Mock failing command
+		originalRootCmd := rootCmd
+		mockCmd := &cobra.Command{
+			Use: "test",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Fprintln(os.Stderr, "error occurred")
+				return fmt.Errorf("command failed")
+			},
 		}
+		mockCmd.SetOut(os.Stdout)
+		mockCmd.SetErr(os.Stderr)
+		rootCmd = mockCmd
+		defer func() { rootCmd = originalRootCmd }()
 
-		output := out.String()
-		// Should indicate no mutations found
-		if !strings.Contains(output, "0") && !strings.Contains(output, "No") {
-			t.Errorf("expected output to indicate no mutations, got: %s", output)
+		Execute() // This should call os.Exit(1)
+		return
+	}
+
+	// Parent process: spawn subprocess
+	cmd := exec.Command(os.Args[0], "-test.run=TestExecute_ProcessLevel_Failure")
+	cmd.Env = append(os.Environ(), "TEST_EXECUTE_SUBPROCESS_FAIL=1")
+	output, err := cmd.CombinedOutput()
+
+	if err == nil {
+		t.Error("Expected process to exit with error")
+	}
+
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr.ExitCode() != 1 {
+			t.Errorf("Expected exit code 1, got %d", exitErr.ExitCode())
 		}
-	})
+	} else {
+		t.Errorf("Expected exec.ExitError, got %T", err)
+	}
 
-	t.Run("runs boolean mutations on boolean example", func(t *testing.T) {
-		cmd := newRootCmd()
-		cmd.SetArgs([]string{"../examples/boolean"})
-
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-
-		done := make(chan error, 1)
-		go func() {
-			done <- cmd.Execute()
-		}()
-
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("Execute error: %v", err)
-			}
-		case <-time.After(30 * time.Second):
-			t.Fatal("command timed out after 30s")
-		}
-
-		output := out.String()
-		// Should show mutations were tested (not 0 mutations)
-		// examples/boolean has 4 boolean literals, so should have at least 4 mutations
-		if strings.Contains(output, ": 0 mutations") {
-			t.Fatalf("expected non-zero mutations for boolean example, got: %s", output)
-		}
-		// Should have mutation results
-		if !strings.Contains(output, "main.go") {
-			t.Errorf("expected output to contain main.go, got: %s", output)
-		}
-	})
+	if !strings.Contains(string(output), "error occurred") {
+		t.Logf("Output: %s", output)
+	}
 }

@@ -41,9 +41,9 @@ A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 - [ ] Focus mutation testing on modified code
 
 ### Performance & Scalability
-- [ ] `--parallel` flag for concurrent mutation testing
-- [ ] Sharding support for distributed execution across multiple machines
-- [ ] Compatible with parallel execution within shards
+- [x] `--parallel` flag for concurrent mutation testing
+- [x] Sharding support for distributed execution across multiple machines
+- [x] Compatible with parallel execution within shards
 - [ ] Automatic report merging from multiple shards
 
 ### Reporting

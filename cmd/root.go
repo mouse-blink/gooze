@@ -6,13 +6,43 @@ import (
 	"os"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
+	"github.com/mouse-blink/gooze/internal/controller"
 	"github.com/mouse-blink/gooze/internal/domain"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
 )
 
+var goFileAdapter adapter.GoFileAdapter
+var soirceFSAdapter adapter.SourceFSAdapter
+var reportStore adapter.ReportStore
+var fsAdapter adapter.SourceFSAdapter
+var testAdapter adapter.TestRunnerAdapter
+var orchestrator domain.Orchestrator
+var mutagen domain.Mutagen
+var workflow domain.Workflow
+var ui controller.UI
+
+func init() {
+	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
+	goFileAdapter = adapter.NewLocalGoFileAdapter()
+	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
+	reportStore = adapter.NewReportStore()
+	fsAdapter = adapter.NewLocalSourceFSAdapter()
+	testAdapter = adapter.NewLocalTestRunnerAdapter()
+	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
+	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
+	workflow = domain.NewWorkflow(
+		soirceFSAdapter,
+		reportStore,
+		ui,
+		orchestrator,
+		mutagen,
+	)
+}
+
 var listFlag bool
 var parallelFlag int
+var shardFlag string
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
@@ -29,93 +59,36 @@ Supports Go-style path patterns:
   - ./...          recursively scan current directory
   - ./pkg/...      recursively scan pkg directory
   - ./cmd ./pkg    scan multiple directories`,
-		RunE: runRoot,
-	}
+		RunE: func(_ *cobra.Command, args []string) error {
+			shardIndex, totalShards := parseShardFlag(shardFlag)
 
+			paths := make([]m.Path, 0, len(args))
+			for _, arg := range args {
+				paths = append(paths, m.Path(arg))
+			}
+
+			estimateArgs := domain.EstimateArgs{
+				Paths:    paths,
+				UseCache: listFlag,
+			}
+			if listFlag {
+				return workflow.Estimate(estimateArgs)
+			}
+
+			return workflow.Test(domain.TestArgs{
+				EstimateArgs:    estimateArgs,
+				Reports:         ".gooze-reports",
+				Threads:         parallelFlag,
+				ShardIndex:      shardIndex,
+				TotalShardCount: totalShards,
+			})
+		},
+	}
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
 	cmd.Flags().IntVarP(&parallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
+	cmd.Flags().StringVarP(&shardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 
 	return cmd
-}
-
-func runRoot(cmd *cobra.Command, args []string) error {
-	// Default to current directory if no paths specified
-	paths := args
-	if len(paths) == 0 {
-		paths = []string{"."}
-	}
-
-	// Convert string paths to m.Path type
-	mPaths := make([]m.Path, len(paths))
-	for i, p := range paths {
-		mPaths[i] = m.Path(p)
-	}
-
-	// Create adapters
-	fsAdapter := adapter.NewLocalSourceFSAdapter()
-	goAdapter := adapter.NewLocalGoFileAdapter()
-	testAdapter := adapter.NewLocalTestRunnerAdapter()
-
-	// Get all sources from all paths
-	wf := domain.NewWorkflow(fsAdapter, goAdapter, testAdapter)
-
-	sources, err := wf.GetSources(mPaths...)
-	if err != nil {
-		return fmt.Errorf("error processing paths: %w", err)
-	}
-
-	// Use factory to create appropriate UI based on TTY detection
-	useTTY := adapter.IsTTY(cmd.OutOrStdout())
-	ui := adapter.NewUI(cmd, useTTY)
-
-	// Handle list flag - show mutation counts
-	if listFlag {
-		// Calculate estimations for all sources
-		estimations := make(map[m.Path]adapter.MutationEstimation)
-
-		for _, source := range sources {
-			arithmeticCount, err := wf.EstimateMutations(source, m.MutationArithmetic)
-			if err != nil {
-				return fmt.Errorf("failed to estimate arithmetic mutations for %s: %w", source.Origin, err)
-			}
-
-			booleanCount, err := wf.EstimateMutations(source, m.MutationBoolean)
-			if err != nil {
-				return fmt.Errorf("failed to estimate boolean mutations for %s: %w", source.Origin, err)
-			}
-
-			estimations[source.Origin] = adapter.MutationEstimation{
-				Arithmetic: arithmeticCount,
-				Boolean:    booleanCount,
-			}
-		}
-
-		return ui.DisplayMutationEstimations(estimations)
-	}
-
-	// Default behavior: run mutation testing
-	return runMutationTests(wf, ui, sources, parallelFlag)
-}
-
-// runMutationTests executes mutation testing on all sources.
-func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source, threads int) error {
-	if len(sources) == 0 {
-		return ui.ShowNotImplemented(0)
-	}
-
-	// Delegate core mutation test execution to the workflow.
-	results, err := wf.RunMutationTests(sources, threads)
-	if err != nil {
-		return err
-	}
-
-	// Adapt results to the UI's expected map type.
-	fileResults := make(map[m.Path]interface{}, len(results))
-	for path, res := range results {
-		fileResults[path] = res
-	}
-
-	return ui.DisplayMutationResults(sources, fileResults)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -125,4 +98,19 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func parseShardFlag(shard string) (int, int) {
+	if shard == "" {
+		return 0, 1
+	}
+
+	var index, total int
+
+	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
+	if err != nil || total <= 0 || index < 0 || index >= total {
+		return 0, 1
+	}
+
+	return index, total
 }

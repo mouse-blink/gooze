@@ -3,7 +3,10 @@ package adapter
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,6 +21,8 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
+	Get(root []m.Path) ([]m.Source, error)
+
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
 	Walk(root m.Path, recursive bool, fn FilepathWalkFunc) error
@@ -72,6 +77,51 @@ type LocalSourceFSAdapter struct{}
 // be wired into the workflow.
 func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 	return &LocalSourceFSAdapter{}
+}
+
+// Get collects Go source files for the provided roots and returns SourceV2 entries.
+func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.Source, error) {
+	if len(roots) == 0 {
+		return []m.Source{}, nil
+	}
+
+	seen := make(map[string]struct{})
+	sources := make([]m.Source, 0, len(roots))
+
+	for _, root := range roots {
+		rootPath, recursive, err := normalizeRootPath(string(root))
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := a.FileInfo(m.Path(rootPath))
+		if err != nil {
+			return nil, fmt.Errorf("root path error: %w", err)
+		}
+
+		if !info.IsDir() {
+			source, ok, err := a.processFilePath(rootPath)
+			if err != nil {
+				if isInvalidSourceErr(err) {
+					continue
+				}
+
+				return nil, err
+			}
+
+			if ok {
+				addSourceIfNew(&sources, seen, source)
+			}
+
+			continue
+		}
+
+		if err := a.collectSourcesFromDir(rootPath, recursive, seen, &sources); err != nil {
+			return nil, err
+		}
+	}
+
+	return sources, nil
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
@@ -256,4 +306,160 @@ func (a *LocalSourceFSAdapter) RelPath(base, target m.Path) (m.Path, error) {
 // JoinPath joins path elements into a single path.
 func (a *LocalSourceFSAdapter) JoinPath(elem ...string) m.Path {
 	return m.Path(filepath.Join(elem...))
+}
+
+func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Source) {
+	if source.Origin == nil {
+		return
+	}
+
+	if _, exists := seen[string(source.Origin.Path)]; exists {
+		return
+	}
+
+	seen[string(source.Origin.Path)] = struct{}{}
+	*sources = append(*sources, source)
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, seen map[string]struct{}, sources *[]m.Source) error {
+	return a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		source, ok, err := a.processFilePath(path)
+		if err != nil {
+			if isInvalidSourceErr(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		if !ok {
+			return nil
+		}
+
+		addSourceIfNew(sources, seen, source)
+
+		return nil
+	})
+}
+
+func normalizeRootPath(root string) (string, bool, error) {
+	rootStr, recursive := parseRootPath(root)
+
+	if strings.HasPrefix(rootStr, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false, err
+		}
+
+		suffix := strings.TrimPrefix(rootStr, "~")
+		suffix = strings.TrimPrefix(suffix, string(os.PathSeparator))
+		rootStr = filepath.Join(home, suffix)
+	}
+
+	if rootStr == "" {
+		rootStr = "."
+	}
+
+	abs, err := filepath.Abs(rootStr)
+	if err != nil {
+		return "", false, err
+	}
+
+	return abs, recursive, nil
+}
+
+func parseRootPath(rootStr string) (path string, recursive bool) {
+	if len(rootStr) >= 4 && rootStr[len(rootStr)-4:] == "/..." {
+		return rootStr[:len(rootStr)-4], true
+	}
+
+	return rootStr, false
+}
+
+func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, error) {
+	if filepath.Ext(path) != ".go" {
+		return m.Source{}, false, nil
+	}
+
+	if strings.HasSuffix(path, "_test.go") {
+		return m.Source{}, false, nil
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return m.Source{}, false, err
+	}
+
+	src, err := a.ReadFile(m.Path(absPath))
+	if err != nil {
+		return m.Source{}, false, fmt.Errorf("%w: read source file: %w", errInvalidSource, err)
+	}
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
+	if err != nil {
+		return m.Source{}, false, fmt.Errorf("%w: parse source file: %w", errInvalidSource, err)
+	}
+
+	if file.Name == nil {
+		return m.Source{}, false, fmt.Errorf("%w: missing package name", errInvalidSource)
+	}
+
+	originHash, err := a.HashFile(m.Path(absPath))
+	if err != nil {
+		return m.Source{}, false, err
+	}
+
+	origin := &m.File{Path: m.Path(absPath), Hash: originHash}
+
+	testFile := a.detectTestFile(m.Path(absPath))
+
+	packageName := file.Name.Name
+
+	return m.Source{
+		Origin:  origin,
+		Test:    testFile,
+		Package: &packageName,
+	}, true, nil
+}
+
+func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path) *m.File {
+	testPath, err := a.DetectTestFile(sourcePath)
+	if err != nil || testPath == "" {
+		return nil
+	}
+
+	testSrc, err := a.ReadFile(testPath)
+	if err != nil {
+		return nil
+	}
+
+	testFset := token.NewFileSet()
+
+	testAST, err := parser.ParseFile(testFset, string(testPath), testSrc, parser.AllErrors)
+	if err != nil || testAST == nil || testAST.Name == nil {
+		return nil
+	}
+
+	testHash, err := a.HashFile(testPath)
+	if err != nil {
+		return nil
+	}
+
+	return &m.File{Path: testPath, Hash: testHash}
+}
+
+var errInvalidSource = errors.New("invalid source file")
+
+func isInvalidSourceErr(err error) bool {
+	return errors.Is(err, errInvalidSource)
 }

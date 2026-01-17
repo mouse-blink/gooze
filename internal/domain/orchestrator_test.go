@@ -1,35 +1,103 @@
 package domain
 
 import (
+	"errors"
+	"os"
 	"testing"
 
+	adaptermocks "github.com/mouse-blink/gooze/internal/adapter/mocks"
 	m "github.com/mouse-blink/gooze/internal/model"
+	"github.com/stretchr/testify/require"
 )
 
-// TestOrchestrator_NoTestFile verifies that when no test file is specified,
-// the orchestrator reports the mutation as surviving with a clear message
-// and without returning an error.
-func TestOrchestrator_NoTestFile(t *testing.T) {
-	// Adapters are not used in this code path, so nil is fine.
+func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 	orch := NewOrchestrator(nil, nil)
 
-	source := m.Source{
-		Origin: "dummy.go",
-		Test:   "", // no test file
+	mutation := m.Mutation{
+		ID:   1,
+		Type: m.MutationArithmetic,
+		Source: m.Source{
+			Origin: nil,
+			Test:   &m.File{Path: m.Path("/project/main_test.go")},
+		},
 	}
 
-	mutation := m.Mutation{}
+	_, err := orch.TestMutation(mutation)
+	require.Error(t, err)
+}
 
-	report, err := orch.TestMutation(source, mutation)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
+	orch := NewOrchestrator(nil, nil)
+
+	mutation := m.Mutation{
+		ID:   2,
+		Type: m.MutationBoolean,
+		Source: m.Source{
+			Origin: &m.File{Path: m.Path("/project/main.go")},
+			Test:   nil,
+		},
 	}
 
-	if report.Killed {
-		t.Fatalf("expected mutation to survive when no test file is specified")
-	}
+	result, err := orch.TestMutation(mutation)
+	require.NoError(t, err)
 
-	if report.Output != "no test file specified" {
-		t.Fatalf("unexpected output: %q", report.Output)
+	entries, ok := result[mutation.Type]
+	require.True(t, ok)
+	require.Len(t, entries, 1)
+	require.Equal(t, "2", entries[0].MutationID)
+	require.Equal(t, m.Survived, entries[0].Status)
+}
+
+func TestOrchestrator_TestMutation_FindProjectRootError(t *testing.T) {
+	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
+	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
+	orch := NewOrchestrator(fsAdapter, trAdapter)
+
+	mutation := makeTestMutation()
+
+	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.Path).Return(m.Path(""), errors.New("root err"))
+
+	_, err := orch.TestMutation(mutation)
+	require.Error(t, err)
+}
+
+func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
+	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
+	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
+	orch := NewOrchestrator(fsAdapter, trAdapter)
+
+	mutation := makeTestMutation()
+	projectRoot := m.Path("/project")
+	tmpDir := m.Path("/tmp/mut")
+
+	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.Path).Return(projectRoot, nil)
+	fsAdapter.EXPECT().CreateTempDir("gooze-mutation-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().CopyDir(projectRoot, tmpDir).Return(nil)
+	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Origin.Path).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
+	fsAdapter.EXPECT().WriteFile(m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Test.Path).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
+	fsAdapter.EXPECT().RemoveAll(tmpDir).Return(nil)
+	trAdapter.EXPECT().RunGoTest("/tmp/mut", "/tmp/mut/main_test.go").Return("boom", errors.New("failed"))
+
+	result, err := orch.TestMutation(mutation)
+	require.NoError(t, err)
+
+	entries, ok := result[mutation.Type]
+	require.True(t, ok)
+	require.Len(t, entries, 1)
+	require.Equal(t, m.Killed, entries[0].Status)
+}
+
+func makeTestMutation() m.Mutation {
+	return m.Mutation{
+		ID:          1,
+		Type:        m.MutationArithmetic,
+		MutatedCode: []byte("package main\nfunc main() { _ = 1 + 1 }\n"),
+		Source: m.Source{
+			Origin: &m.File{Path: m.Path("/project/main.go")},
+			Test:   &m.File{Path: m.Path("/project/main_test.go")},
+		},
 	}
 }

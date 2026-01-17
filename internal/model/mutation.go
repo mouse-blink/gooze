@@ -1,8 +1,6 @@
 // Package model defines the data structures for mutation testing.
 package model
 
-import "go/token"
-
 // MutationType represents the category of mutation.
 type MutationType string
 
@@ -13,16 +11,12 @@ const (
 	MutationBoolean MutationType = "boolean"
 )
 
-// Mutation represents a code mutation for testing.
+// Mutation represents a code mutation with its details.
+// Mutation represents a single mutation applied to source code.
 type Mutation struct {
-	ID           string
-	Type         MutationType
-	SourceFile   Path
-	OriginalOp   token.Token
-	MutatedOp    token.Token
-	OriginalText string // For identifier-based mutations (e.g., "true" -> "false")
-	MutatedText  string // For identifier-based mutations (e.g., "false" -> "true")
-	Line         int
-	Column       int
-	ScopeType    ScopeType
+	// ID is the unique identifier for a mutation within a test run.
+	ID          int
+	Source      Source
+	Type        MutationType
+	MutatedCode []byte
 }

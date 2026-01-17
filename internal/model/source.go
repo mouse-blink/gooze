@@ -20,21 +20,16 @@ const (
 	ScopeFunction ScopeType = "function"
 )
 
-// CodeScope represents a region of code with its scope type and line range.
-type CodeScope struct {
-	Type      ScopeType
-	StartLine int
-	EndLine   int
-	Name      string // function/variable name for debugging
+// File represents a source code file.
+type File struct {
+	Path Path
+	Hash string
 }
 
-// Source represents a Go source file with mutation scopes.
+// Source represents a pair of source and test files along with their package name.
+// Source represents a Go source file and its optional test file metadata.
 type Source struct {
-	Hash   string
-	Origin Path
-	Test   Path
-	// Lines contains line numbers for backward compatibility (function lines only)
-	Lines []int
-	// Scopes provides detailed scope information for selective mutation
-	Scopes []CodeScope
+	Origin  *File
+	Test    *File
+	Package *string
 }
