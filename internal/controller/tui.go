@@ -167,9 +167,15 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 		status = formatTestStatus(results[0].Status)
 	}
 
+	path := ""
+	if currentMutation.Source.Origin != nil {
+		path = string(currentMutation.Source.Origin.Path)
+	}
+
 	t.send(completedMutationMsg{
 		id:     currentMutation.ID,
 		kind:   currentMutation.Type,
+		path:   path,
 		status: status,
 	})
 }

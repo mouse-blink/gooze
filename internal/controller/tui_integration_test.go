@@ -112,7 +112,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	}
 
 	// Complete the mutation
-	completeMsg := completedMutationMsg{id: 1, kind: m.MutationArithmetic, status: "killed"}
+	completeMsg := completedMutationMsg{id: 1, kind: m.MutationArithmetic, path: "test.go", status: "killed"}
 	updated, _ = model.Update(completeMsg)
 	model = updated.(testExecutionModel)
 
@@ -130,7 +130,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 
 	// Complete remaining mutations to finish
 	for i := 2; i <= 10; i++ {
-		completeMsg := completedMutationMsg{id: i, kind: m.MutationBoolean, status: "survived"}
+		completeMsg := completedMutationMsg{id: i, kind: m.MutationBoolean, path: "test.go", status: "survived"}
 		updated, _ = model.Update(completeMsg)
 		model = updated.(testExecutionModel)
 	}

@@ -535,9 +535,9 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 	m.completedCount++
 	m.currentStatus = msg.status
 	result := testResult{
-		id:     m.currentMutationID,
-		file:   m.currentFile,
-		typ:    m.currentType,
+		id:     fmt.Sprintf("%d", msg.id),
+		file:   msg.path,
+		typ:    fmt.Sprintf("%v", msg.kind),
 		status: msg.status,
 	}
 	m.results = append(m.results, result)

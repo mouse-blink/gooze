@@ -22,6 +22,7 @@ type startMutationMsg struct {
 type completedMutationMsg struct {
 	id     int
 	kind   interface{}
+	path   string
 	status string
 }
 

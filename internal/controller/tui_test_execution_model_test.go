@@ -48,7 +48,7 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 	}
 
 	m.totalMutations = 1
-	m = m.handleCompletedMutation(completedMutationMsg{id: 5, kind: "arith", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 5, kind: "arith", path: "path/a.go", status: "killed"})
 	if m.completedCount != 1 || m.progressPercent != 1 || !m.testingFinished {
 		t.Fatalf("handleCompletedMutation did not complete progress")
 	}
@@ -61,7 +61,7 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 
 	// when totalMutations is zero, progress should not update
 	m.totalMutations = 0
-	m = m.handleCompletedMutation(completedMutationMsg{id: 6, kind: "arith", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 6, kind: "arith", path: "path/b.go", status: "survived"})
 	if m.progressPercent != 1 {
 		t.Fatalf("progressPercent = %v, want 1", m.progressPercent)
 	}
@@ -229,7 +229,7 @@ func TestTestExecutionModel_UpdateSwitch(t *testing.T) {
 		t.Fatalf("View after start should show testing")
 	}
 
-	_, _ = m.Update(completedMutationMsg{id: 1, kind: "arith", status: "killed"})
+	_, _ = m.Update(completedMutationMsg{id: 1, kind: "arith", path: "test.go", status: "killed"})
 	_, _ = m.Update(concurrencyMsg{threads: 2, shardIndex: 1, shards: 3})
 	_, _ = m.Update(upcomingMsg{count: 10})
 	_, _ = m.Update(estimationMsg{})
@@ -240,4 +240,64 @@ func TestTestExecutionModel_UpdateSwitch(t *testing.T) {
 	_, _ = m.resultsList.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 	_, cmd := m.handleTickMsg(tickMsg(time.Now()))
 	_ = cmd
+}
+
+func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
+	// This test simulates parallel execution with 4 threads
+	// and verifies that each thread correctly tracks its own mutation ID
+	m := newTestExecutionModel()
+	m.threads = 4
+	m.totalMutations = 4
+	m.threadFiles = make(map[int]string)
+	m.threadMutationIDs = make(map[int]string)
+
+	// Simulate 4 mutations starting in parallel on different threads
+	m = m.handleStartMutation(startMutationMsg{id: 0, thread: 0, kind: "arith", path: "file1.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 1, thread: 1, kind: "bool", path: "file2.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 2, thread: 2, kind: "comp", path: "file3.go"})
+	m = m.handleStartMutation(startMutationMsg{id: 3, thread: 3, kind: "logic", path: "file4.go"})
+
+	// Verify each thread is tracking the correct mutation ID
+	if m.threadMutationIDs[0] != "0" {
+		t.Fatalf("thread 0 mutation ID = %q, want \"0\"", m.threadMutationIDs[0])
+	}
+	if m.threadMutationIDs[1] != "1" {
+		t.Fatalf("thread 1 mutation ID = %q, want \"1\"", m.threadMutationIDs[1])
+	}
+	if m.threadMutationIDs[2] != "2" {
+		t.Fatalf("thread 2 mutation ID = %q, want \"2\"", m.threadMutationIDs[2])
+	}
+	if m.threadMutationIDs[3] != "3" {
+		t.Fatalf("thread 3 mutation ID = %q, want \"3\"", m.threadMutationIDs[3])
+	}
+
+	// Simulate mutations completing in a different order (2, 0, 3, 1)
+	m = m.handleCompletedMutation(completedMutationMsg{id: 2, kind: "comp", path: "file3.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 0, kind: "arith", path: "file1.go", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 3, kind: "logic", path: "file4.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: 1, kind: "bool", path: "file2.go", status: "killed"})
+
+	// Verify all results were recorded with correct IDs
+	if len(m.results) != 4 {
+		t.Fatalf("results length = %d, want 4", len(m.results))
+	}
+
+	// Check that each result has the correct ID (they should be in completion order)
+	expectedIDs := []string{"2", "0", "3", "1"}
+	for i, expected := range expectedIDs {
+		if m.results[i].id != expected {
+			t.Fatalf("result[%d].id = %q, want %q", i, m.results[i].id, expected)
+		}
+	}
+
+	// Verify progress tracking
+	if m.completedCount != 4 {
+		t.Fatalf("completedCount = %d, want 4", m.completedCount)
+	}
+	if !m.testingFinished {
+		t.Fatal("testingFinished should be true")
+	}
+	if m.progressPercent != 1.0 {
+		t.Fatalf("progressPercent = %v, want 1.0", m.progressPercent)
+	}
 }
