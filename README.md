@@ -8,7 +8,7 @@ A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
 - [x] Boolean Literal
 - [ ] Numbers
-- [ ] Unary / Negation
+- [x] Unary / Negation
 - [x] Arithmetic
 - [x] Comparison / Relational
 - [x] Logical Operators

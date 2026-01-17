@@ -13,6 +13,8 @@ const (
 	MutationComparison MutationType = "comparison"
 	// MutationLogical represents logical operator mutations (&&, ||).
 	MutationLogical MutationType = "logical"
+	// MutationUnary represents unary operator mutations (-, +, !, ^).
+	MutationUnary MutationType = "unary"
 )
 
 // Mutation represents a code mutation with its details.
