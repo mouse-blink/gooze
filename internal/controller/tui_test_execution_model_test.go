@@ -107,6 +107,44 @@ func TestTestExecutionModel_HandleKeyMsgAndTick(t *testing.T) {
 	}
 }
 
+func TestTestExecutionModel_ToggleDiff(t *testing.T) {
+	m := newTestExecutionModel()
+	m.testingFinished = true
+	m.rendered = true
+	m.resultsList.SetItems([]list.Item{
+		testResult{id: "1", file: "a.go", typ: "bool", status: "survived", diff: "--- a\n+++ b\n"},
+	})
+	m.resultsList.Select(0)
+
+	updated, _ := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEnter})
+	if !updated.showDiff || updated.selectedDiff == "" {
+		t.Fatalf("expected diff to be shown on enter")
+	}
+
+	updated, _ = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEnter})
+	if updated.showDiff || updated.selectedDiff != "" {
+		t.Fatalf("expected diff to be hidden on second enter")
+	}
+
+	mouse := tea.MouseMsg(tea.MouseEvent{Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	updated, _ = updated.handleMouseMsg(mouse)
+	if !updated.showDiff {
+		t.Fatalf("expected diff to be shown on mouse click")
+	}
+
+	updated.resultsList.SetItems([]list.Item{
+		testResult{id: "1", file: "a.go", typ: "bool", status: "survived", diff: ""},
+	})
+	updated.resultsList.Select(0)
+	updated.showDiff = false
+	updated.selectedDiff = ""
+	updated.selectedDiffPath = ""
+	updated, _ = updated.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEnter})
+	if updated.showDiff {
+		t.Fatalf("expected diff to remain hidden when empty")
+	}
+}
+
 func TestTestExecutionModel_WindowSizeAndViews(t *testing.T) {
 	m := newTestExecutionModel()
 	m = m.handleWindowSize(tea.WindowSizeMsg{Width: 10, Height: 5})

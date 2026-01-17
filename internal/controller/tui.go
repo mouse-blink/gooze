@@ -54,6 +54,7 @@ func (t *TUI) startWithModel(model tea.Model) error {
 		model,
 		tea.WithOutput(t.output),
 		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
 	)
 	t.done = make(chan struct{})
 	t.started = true
@@ -181,10 +182,15 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 
 	path := ""
 	fileHash := ""
+	diff := []byte(nil)
 
 	if currentMutation.Source.Origin != nil {
 		path = string(currentMutation.Source.Origin.ShortPath)
 		fileHash = currentMutation.Source.Origin.Hash
+	}
+
+	if status == formatTestStatus(m.Survived) && len(currentMutation.DiffCode) > 0 {
+		diff = currentMutation.DiffCode
 	}
 
 	t.send(completedMutationMsg{
@@ -193,6 +199,7 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 		fileHash:    fileHash,
 		displayPath: path,
 		status:      status,
+		diff:        diff,
 	})
 }
 

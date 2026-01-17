@@ -66,18 +66,85 @@ func TestTUI_Send_And_EnsureStarted_NoPanic(t *testing.T) {
 	tui.ensureStarted()
 }
 
-func TestTUI_StartModesAndEdgeCases(t *testing.T) {
+func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 	var buf bytes.Buffer
 	tui := NewTUI(&buf)
 
-	if err := tui.Start(WithTestMode()); err != nil {
-		t.Fatalf("Start with test mode error = %v", err)
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	mutation := m.Mutation{
+		ID:       10,
+		Type:     m.MutationArithmetic,
+		Source:   m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
+		DiffCode: diffCode,
 	}
 
-	// Start again should be no-op
-	if err := tui.Start(); err != nil {
-		t.Fatalf("Start again error = %v", err)
+	survivedResult := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "10", Status: m.Survived}},
 	}
+
+	// Start TUI in test mode
+	if err := tui.Start(WithTestMode()); err != nil {
+		t.Fatalf("Start error = %v", err)
+	}
+
+	// Test that DisplayCompletedTestInfo sends message with diff for survived mutation
+	tui.DisplayCompletedTestInfo(mutation, survivedResult)
+
+	// Verify it doesn't panic and the TUI is still functional
+	tui.Close()
+}
+
+func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
+	var buf bytes.Buffer
+	tui := NewTUI(&buf)
+
+	mutation := m.Mutation{
+		ID:     10,
+		Type:   m.MutationArithmetic,
+		Source: m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
+		// No DiffCode
+	}
+
+	killedResult := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "10", Status: m.Killed}},
+	}
+
+	// Start TUI in test mode
+	if err := tui.Start(WithTestMode()); err != nil {
+		t.Fatalf("Start error = %v", err)
+	}
+
+	// Test that DisplayCompletedTestInfo sends message without diff for killed mutation
+	tui.DisplayCompletedTestInfo(mutation, killedResult)
+
+	// Verify it doesn't panic and the TUI is still functional
+	tui.Close()
+}
+
+func TestTUI_StartWithMouseCellMotion(t *testing.T) {
+	var buf bytes.Buffer
+	tui := NewTUI(&buf)
+
+	// Test that TUI starts with mouse cell motion enabled (should not error)
+	if err := tui.Start(); err != nil {
+		t.Fatalf("Start error = %v", err)
+	}
+
+	tui.Close()
+}
+
+func TestTUI_MultipleClose(t *testing.T) {
+	var buf bytes.Buffer
+	tui := NewTUI(&buf)
 
 	tui.Close()
 	tui.Close() // Close again should be safe

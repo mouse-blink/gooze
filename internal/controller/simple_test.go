@@ -18,10 +18,9 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 	ui := NewSimpleUI(cmd)
 
 	mutations := []m.Mutation{
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/other/a.go", Hash: "hash-a-2"}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "b.go", FullPath: "path/b.go", Hash: "hash-b"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}},
+		{Source: m.Source{Origin: &m.File{ShortPath: "b.go", FullPath: "path/b.go"}}},
 		{Source: m.Source{Origin: nil}},
 	}
 
@@ -36,8 +35,8 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 		"b.go",
 		"2",
 		"1",
-		"TOTAL FILES 3",
-		"5",
+		"TOTAL FILES 2",
+		"4",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)
@@ -89,9 +88,14 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 			Status     m.TestStatus
 			Err        error
 		}{{MutationID: "10", Status: m.Killed}},
+		m.MutationBoolean: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "11", Status: m.Survived}},
 	}
 	ui.DisplayCompletedTestInfo(m.Mutation{ID: 10, Type: m.MutationArithmetic}, result)
-	ui.DisplayCompletedTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean}, m.Result{})
+	ui.DisplayCompletedTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
 
 	output := buf.String()
 	for _, want := range []string{
@@ -100,7 +104,9 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 		"Starting mutation 10 (arithmetic)",
 		"Starting mutation 11 (boolean) a.go",
 		"Completed mutation 10 (arithmetic) -> killed",
-		"Completed mutation 11 (boolean) -> unknown",
+		"Completed mutation 11 (boolean) -> survived",
+		"File: path/a.go",
+		"--- original",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)

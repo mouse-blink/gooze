@@ -26,6 +26,7 @@ type completedMutationMsg struct {
 	fileHash    string
 	displayPath string
 	status      string
+	diff        []byte
 }
 
 type fileStat struct {

@@ -9,37 +9,7 @@ import (
 
 // GenerateComparisonMutations generates comparison operator mutations for the given AST node.
 func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
-	binExpr, ok := n.(*ast.BinaryExpr)
-	if !ok {
-		return nil
-	}
-
-	if !isComparisonOp(binExpr.Op) {
-		return nil
-	}
-
-	start, ok := offsetForPos(fset, binExpr.OpPos)
-	if !ok {
-		return nil
-	}
-
-	original := binExpr.Op.String()
-	end := start + len(original)
-
-	var mutations []m.Mutation
-
-	for _, mutatedOp := range getComparisonAlternatives(binExpr.Op) {
-		*mutationID++
-		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
-		mutations = append(mutations, m.Mutation{
-			ID:          *mutationID - 1,
-			Source:      source,
-			Type:        m.MutationComparison,
-			MutatedCode: mutatedCode,
-		})
-	}
-
-	return mutations
+	return generateBinaryExprMutations(n, fset, content, source, mutationID, m.MutationComparison, isComparisonOp, getComparisonAlternatives)
 }
 
 func isComparisonOp(op token.Token) bool {

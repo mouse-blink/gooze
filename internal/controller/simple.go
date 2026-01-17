@@ -124,6 +124,19 @@ func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutation
 	}
 
 	s.printf("Completed mutation %d (%s) -> %s\n", currentMutation.ID, currentMutation.Type, status)
+
+	if status == formatTestStatus(m.Survived) && len(currentMutation.DiffCode) > 0 {
+		path := ""
+		if currentMutation.Source.Origin != nil {
+			path = string(currentMutation.Source.Origin.FullPath)
+		}
+
+		if path != "" {
+			s.printf("File: %s\n", path)
+		}
+
+		s.printf("%s\n", currentMutation.DiffCode)
+	}
 }
 
 func (s *SimpleUI) printf(format string, args ...interface{}) {

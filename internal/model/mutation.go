@@ -25,4 +25,5 @@ type Mutation struct {
 	Source      Source
 	Type        MutationType
 	MutatedCode []byte
+	DiffCode    []byte
 }

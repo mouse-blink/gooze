@@ -33,12 +33,14 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 
 	*mutationID++
 	mutatedCode := replaceRange(content, start, end, mutated)
+	diff := diffCode(content, mutatedCode)
 
 	return []m.Mutation{{
 		ID:          *mutationID - 1,
 		Source:      source,
 		Type:        m.MutationBoolean,
 		MutatedCode: mutatedCode,
+		DiffCode:    diff,
 	}}
 }
 

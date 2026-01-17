@@ -451,3 +451,157 @@ func TestWorkflow_NewWorkflowV2(t *testing.T) {
 	require.NotNil(t, wf)
 	assert.Implements(t, (*domain.Workflow)(nil), wf)
 }
+
+func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
+	// Arrange - This test specifically checks that survived mutations include diff data
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       0,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	// Mock a survived mutation result
+	survivedResult := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "0", Status: m.Survived}},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], survivedResult).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(survivedResult, nil)
+
+	// Verify that the report includes the diff for survived mutations
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		// Check that diff is included for survived mutation
+		return report.Diff != nil && string(*report.Diff) == string(diffCode)
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+	mockFSAdapter.AssertExpectations(t)
+	mockMutagen.AssertExpectations(t)
+	mockOrchestrator.AssertExpectations(t)
+	mockReportStore.AssertExpectations(t)
+	mockUI.AssertExpectations(t)
+}
+
+func TestWorkflow_TestWithKilledMutation(t *testing.T) {
+	// Arrange - This test checks that killed mutations do NOT include diff data
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       0,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	// Mock a killed mutation result
+	killedResult := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "0", Status: m.Killed}},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], killedResult).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(killedResult, nil)
+
+	// Verify that the report does NOT include diff for killed mutations
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		// Check that diff is NOT included for killed mutation
+		return report.Diff == nil
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+	mockFSAdapter.AssertExpectations(t)
+	mockMutagen.AssertExpectations(t)
+	mockOrchestrator.AssertExpectations(t)
+	mockReportStore.AssertExpectations(t)
+	mockUI.AssertExpectations(t)
+}

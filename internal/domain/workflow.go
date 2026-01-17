@@ -196,38 +196,7 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 
 	for _, mutation := range allMutations {
 		currentMutation := mutation
-
-		group.Go(func() error {
-			// Assign a thread ID to this goroutine
-			threadID := int(atomic.AddInt32(&threadIDCounter, 1)) % threads
-
-			w.DisplayStartingTestInfo(currentMutation, threadID)
-
-			mutationResult, err := w.TestMutation(currentMutation)
-			if err != nil {
-				errorsMutex.Lock()
-
-				errors = append(errors, err)
-
-				errorsMutex.Unlock()
-
-				return nil
-			}
-
-			report := m.Report{
-				Source: currentMutation.Source,
-				Result: mutationResult,
-			}
-
-			reportsMutex.Lock()
-
-			reports = append(reports, report)
-
-			reportsMutex.Unlock()
-			w.DisplayCompletedTestInfo(currentMutation, mutationResult)
-
-			return nil
-		})
+		group.Go(w.processMutation(currentMutation, &threadIDCounter, threads, &reportsMutex, &errorsMutex, &reports, &errors))
 	}
 
 	if err := group.Wait(); err != nil {
@@ -239,4 +208,66 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 	}
 
 	return reports, nil
+}
+
+func (w *workflow) processMutation(
+	currentMutation m.Mutation,
+	threadIDCounter *int32,
+	threads int,
+	reportsMutex *sync.Mutex,
+	errorsMutex *sync.Mutex,
+	reports *[]m.Report,
+	errors *[]error,
+) func() error {
+	return func() error {
+		// Assign a thread ID to this goroutine
+		threadID := int(atomic.AddInt32(threadIDCounter, 1)) % threads
+
+		w.DisplayStartingTestInfo(currentMutation, threadID)
+
+		mutationResult, err := w.TestMutation(currentMutation)
+		if err != nil {
+			errorsMutex.Lock()
+
+			*errors = append(*errors, err)
+
+			errorsMutex.Unlock()
+
+			return nil
+		}
+
+		report := m.Report{
+			Source: currentMutation.Source,
+			Result: mutationResult,
+		}
+		if getMutationStatus(mutationResult, currentMutation) == m.Survived {
+			diff := currentMutation.DiffCode
+			report.Diff = &diff
+		}
+
+		reportsMutex.Lock()
+
+		*reports = append(*reports, report)
+
+		reportsMutex.Unlock()
+
+		w.DisplayCompletedTestInfo(currentMutation, mutationResult)
+
+		return nil
+	}
+}
+
+func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
+	entries, ok := result[mutation.Type]
+	if !ok || len(entries) == 0 {
+		return m.Error
+	}
+
+	for _, entry := range entries {
+		if entry.MutationID == fmt.Sprintf("%d", mutation.ID) {
+			return entry.Status
+		}
+	}
+
+	return entries[0].Status
 }

@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -17,6 +18,7 @@ type testResult struct {
 	file   string
 	typ    string
 	status string
+	diff   string
 }
 
 // Implement list.Item interface for testResult.
@@ -137,6 +139,9 @@ type testExecutionModel struct {
 	delegate          testResultDelegate
 	animOffset        int
 	lastSelected      int
+	showDiff          bool
+	selectedDiff      string
+	selectedDiffPath  string
 }
 
 func newTestExecutionModel() testExecutionModel {
@@ -180,6 +185,9 @@ func (m testExecutionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		m, cmd = m.handleKeyMsg(msg)
+
+	case tea.MouseMsg:
+		m, cmd = m.handleMouseMsg(msg)
 
 	case tickMsg:
 		return m.handleTickMsg(msg)
@@ -384,7 +392,7 @@ func (m testExecutionModel) viewResults() string {
 		Align(lipgloss.Center).
 		Width(m.width)
 
-	footer := footerStyle.Render("↑/k up • ↓/j down • g/G top/bottom • / filter • q quit")
+	footer := footerStyle.Render("↑/k up • ↓/j down • g/G top/bottom • / filter • enter/space/click diff • q quit")
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -395,12 +403,14 @@ func (m testExecutionModel) viewResults() string {
 }
 
 func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string {
-	listHeight := m.height - 9
+	listWidth := m.width - 4
+	diffBoxHeight := m.diffBoxHeight()
+
+	listHeight := m.height - 9 - diffBoxHeight
 	if listHeight < 5 {
 		listHeight = 5
 	}
 
-	listWidth := m.width - 4
 	m.resultsList.SetHeight(listHeight)
 	m.resultsList.SetWidth(listWidth)
 
@@ -420,12 +430,19 @@ func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string 
 		Margin(0, 1, 0, 0).
 		Padding(0, 1)
 
-	return resultsStyle.Render(
+	resultsBox := resultsStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			headers,
 			m.resultsList.View(),
 		),
 	)
+
+	diffBox, _ := m.renderDiffBox(accentColor, listWidth)
+	if diffBox == "" {
+		return resultsBox
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, resultsBox, diffBox)
 }
 
 func (m testExecutionModel) countStatus(status string) int {
@@ -539,6 +556,7 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 		file:   msg.displayPath,
 		typ:    fmt.Sprintf("%v", msg.kind),
 		status: msg.status,
+		diff:   string(msg.diff),
 	}
 	m.results = append(m.results, result)
 
@@ -570,6 +588,11 @@ func (m testExecutionModel) handleKeyMsg(msg tea.KeyMsg) (testExecutionModel, te
 		return m, tea.Quit
 	default:
 		if m.testingFinished {
+			if msg.String() == "enter" || msg.String() == " " {
+				m.toggleSelectedDiff()
+				return m, nil
+			}
+
 			var newList list.Model
 
 			newList, cmd = m.resultsList.Update(msg)
@@ -581,6 +604,9 @@ func (m testExecutionModel) handleKeyMsg(msg tea.KeyMsg) (testExecutionModel, te
 				m.animOffset = 0
 				m.delegate.offset = 0
 				m.resultsList.SetDelegate(m.delegate)
+				m.showDiff = false
+				m.selectedDiff = ""
+				m.selectedDiffPath = ""
 			}
 
 			return m, cmd
@@ -588,6 +614,177 @@ func (m testExecutionModel) handleKeyMsg(msg tea.KeyMsg) (testExecutionModel, te
 	}
 
 	return m, nil
+}
+
+func (m testExecutionModel) handleMouseMsg(msg tea.MouseMsg) (testExecutionModel, tea.Cmd) {
+	var cmd tea.Cmd
+
+	if !m.testingFinished {
+		return m, nil
+	}
+
+	var newList list.Model
+
+	newList, cmd = m.resultsList.Update(msg)
+	m.resultsList = newList
+
+	if m.resultsList.Index() != m.lastSelected {
+		m.lastSelected = m.resultsList.Index()
+		m.animOffset = 0
+		m.delegate.offset = 0
+		m.resultsList.SetDelegate(m.delegate)
+		m.showDiff = false
+		m.selectedDiff = ""
+		m.selectedDiffPath = ""
+	}
+
+	if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionRelease && m.resultsList.FilterState() != list.Filtering {
+		m.toggleSelectedDiff()
+	}
+
+	return m, cmd
+}
+
+func (m *testExecutionModel) toggleSelectedDiff() {
+	item := m.resultsList.SelectedItem()
+
+	result, ok := item.(testResult)
+	if !ok {
+		return
+	}
+
+	diff := strings.TrimSpace(result.diff)
+	if diff == "" {
+		m.showDiff = false
+		m.selectedDiff = ""
+
+		return
+	}
+
+	if m.showDiff && m.selectedDiff == diff {
+		m.showDiff = false
+		m.selectedDiff = ""
+		m.selectedDiffPath = ""
+
+		return
+	}
+
+	m.showDiff = true
+	m.selectedDiff = diff
+	m.selectedDiffPath = result.file
+}
+
+func (m testExecutionModel) diffMaxLines() int {
+	maxLines := m.height / 3
+	if maxLines < 6 {
+		maxLines = 6
+	}
+
+	if maxLines > 20 {
+		maxLines = 20
+	}
+
+	return maxLines
+}
+
+func (m testExecutionModel) diffBoxHeight() int {
+	if !m.showDiff {
+		return 0
+	}
+
+	diff := strings.TrimSpace(m.selectedDiff)
+	if diff == "" {
+		return 0
+	}
+
+	lines := strings.Split(diff, "\n")
+
+	maxLines := m.diffMaxLines()
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
+	return len(lines) + 3
+}
+
+func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int) (string, int) {
+	if !m.showDiff {
+		return "", 0
+	}
+
+	diff := strings.TrimSpace(m.selectedDiff)
+	if diff == "" {
+		return "", 0
+	}
+
+	lines := strings.Split(diff, "\n")
+	maxLines := m.diffMaxLines()
+	truncated := false
+
+	if len(lines) > maxLines {
+		lines = lines[:maxLines-1]
+		truncated = true
+	}
+
+	contentWidth := width - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	bodyLines := make([]string, 0, len(lines)+1)
+	for _, line := range lines {
+		bodyLines = append(bodyLines, renderDiffLine(line, contentWidth))
+	}
+
+	if truncated {
+		bodyLines = append(bodyLines, truncateFile("…", contentWidth))
+	}
+
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("8")).
+		Bold(true)
+
+	headerText := "Diff"
+	if m.selectedDiffPath != "" {
+		headerText = fmt.Sprintf("Diff • %s", m.selectedDiffPath)
+	}
+
+	header := headerStyle.Render(truncateFile(headerText, contentWidth))
+
+	body := lipgloss.JoinVertical(lipgloss.Left, bodyLines...)
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accentColor).
+		Margin(0, 1, 0, 0).
+		Padding(0, 1).
+		Width(width)
+
+	box := boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, body))
+
+	return box, lipgloss.Height(box)
+}
+
+func renderDiffLine(line string, width int) string {
+	trimmed := strings.TrimSpace(line)
+
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+
+	switch {
+	case strings.HasPrefix(line, "+++"):
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	case strings.HasPrefix(line, "---"):
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+	case strings.HasPrefix(line, "@@"):
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+	case strings.HasPrefix(line, "+"):
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	case strings.HasPrefix(line, "-"):
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	case trimmed == "":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	}
+
+	return style.Render(truncateFile(line, width))
 }
 
 func (m testExecutionModel) handleWindowSize(msg tea.WindowSizeMsg) testExecutionModel {

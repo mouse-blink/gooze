@@ -40,4 +40,5 @@ type Result map[MutationType][]struct {
 type Report struct {
 	Source Source
 	Result Result
+	Diff   *[]byte
 }

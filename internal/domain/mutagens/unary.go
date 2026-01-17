@@ -31,22 +31,26 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 	for _, mutatedOp := range getUnaryAlternatives(unaryExpr.Op) {
 		*mutationID++
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
+		diff := diffCode(content, mutatedCode)
 		mutations = append(mutations, m.Mutation{
 			ID:          *mutationID - 1,
 			Source:      source,
 			Type:        m.MutationUnary,
 			MutatedCode: mutatedCode,
+			DiffCode:    diff,
 		})
 	}
 
 	// Also generate removal mutation (remove the unary operator entirely)
 	*mutationID++
 	mutatedCode := replaceRange(content, start, end, "")
+	diff := diffCode(content, mutatedCode)
 	mutations = append(mutations, m.Mutation{
 		ID:          *mutationID - 1,
 		Source:      source,
 		Type:        m.MutationUnary,
 		MutatedCode: mutatedCode,
+		DiffCode:    diff,
 	})
 
 	return mutations
