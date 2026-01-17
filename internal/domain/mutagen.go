@@ -77,11 +77,11 @@ func validateAdapters(mg *mutagen) error {
 
 func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, error) {
 	if len(mutationTypes) == 0 {
-		return []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison}, nil
+		return []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison, m.MutationLogical}, nil
 	}
 
 	for _, mutationType := range mutationTypes {
-		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationComparison {
+		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationComparison && mutationType != m.MutationLogical {
 			return nil, fmt.Errorf("unsupported mutation type: %v", mutationType)
 		}
 	}
@@ -116,6 +116,8 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 			mutations = append(mutations, mutagens.GenerateBooleanMutations(n, fset, content, source, mutationID)...)
 		case m.MutationComparison:
 			mutations = append(mutations, mutagens.GenerateComparisonMutations(n, fset, content, source, mutationID)...)
+		case m.MutationLogical:
+			mutations = append(mutations, mutagens.GenerateLogicalMutations(n, fset, content, source, mutationID)...)
 		}
 
 		return true

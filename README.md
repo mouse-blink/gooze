@@ -11,6 +11,7 @@ A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 - [ ] Unary / Negation
 - [x] Arithmetic
 - [x] Comparison / Relational
+- [x] Logical Operators
 - [ ] Core Logic
 - [ ] Statement
 - [ ] Statement Deletion

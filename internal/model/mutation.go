@@ -11,6 +11,8 @@ const (
 	MutationBoolean MutationType = "boolean"
 	// MutationComparison represents comparison operator mutations (<, >, <=, >=, ==, !=).
 	MutationComparison MutationType = "comparison"
+	// MutationLogical represents logical operator mutations (&&, ||).
+	MutationLogical MutationType = "logical"
 )
 
 // Mutation represents a code mutation with its details.
