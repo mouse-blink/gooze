@@ -87,6 +87,31 @@ func TestRunCmd_MultiplePaths(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_WithExcludePatterns(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
+		return len(args.Exclude) == 2 &&
+			args.Exclude[0] == "^generated_" &&
+			args.Exclude[1] == "_gen\\.go$"
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run", "-x", "^generated_", "-x", "_gen\\.go$", "./..."})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+}
+
 func TestNewRunCmd(t *testing.T) {
 	cmd := newRunCmd()
 
@@ -99,4 +124,6 @@ func TestNewRunCmd(t *testing.T) {
 	assert.NotNil(t, parallelFlag)
 	shardFlag := cmd.Flags().Lookup("shard")
 	assert.NotNil(t, shardFlag)
+	excludeFlag := cmd.Flags().Lookup("exclude")
+	assert.NotNil(t, excludeFlag)
 }

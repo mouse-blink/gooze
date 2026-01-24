@@ -8,6 +8,7 @@ import (
 
 var runParallelFlag int
 var runShardFlag string
+var runExcludeFlags []string
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -24,6 +25,7 @@ func newRunCmd() *cobra.Command {
 			return workflow.Test(domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
 					Paths:    paths,
+					Exclude:  runExcludeFlags,
 					UseCache: false,
 				},
 				Reports:         ".gooze-reports",
@@ -35,6 +37,7 @@ func newRunCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVarP(&runParallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
+	cmd.Flags().StringArrayVarP(&runExcludeFlags, "exclude", "x", nil, "exclude files matching regex (can be repeated)")
 
 	return cmd
 }

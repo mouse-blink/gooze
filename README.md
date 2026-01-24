@@ -40,9 +40,16 @@ With parallel workers:
 gooze run -p 4 ./...
 ```
 
+Exclude files by regex (repeatable):
+
+```bash
+gooze run -x '^vendor/' -x '_gen\.go$' ./...
+```
+
 > Tips:
 > - Use `gooze list` to preview the files and mutation counts before running tests.
 > - Use `--parallel` to reduce total runtime on multi-core machines.
+> - Use `-x`/`--exclude` to skip files by regex (path or base name).
 
 ### UI modes
 
