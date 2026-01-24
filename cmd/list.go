@@ -8,6 +8,7 @@ import (
 
 // listCmd represents the list command.
 var listCmd = newListCmd()
+var listExcludeFlags []string
 
 func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -19,10 +20,12 @@ func newListCmd() *cobra.Command {
 
 			return workflow.Estimate(domain.EstimateArgs{
 				Paths:    paths,
+				Exclude:  listExcludeFlags,
 				UseCache: true,
 			})
 		},
 	}
+	cmd.Flags().StringArrayVarP(&listExcludeFlags, "exclude", "x", nil, "exclude files matching regex (can be repeated)")
 
 	return cmd
 }
