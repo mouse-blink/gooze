@@ -112,6 +112,52 @@ func (_c *MockWorkflow_Test_Call) RunAndReturn(run func(domain.TestArgs) error) 
 	return _c
 }
 
+// View provides a mock function with given fields: args
+func (_m *MockWorkflow) View(args domain.ViewArgs) error {
+	ret := _m.Called(args)
+
+	if len(ret) == 0 {
+		panic("no return value specified for View")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(domain.ViewArgs) error); ok {
+		r0 = rf(args)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockWorkflow_View_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'View'
+type MockWorkflow_View_Call struct {
+	*mock.Call
+}
+
+// View is a helper method to define mock.On call
+//   - args domain.ViewArgs
+func (_e *MockWorkflow_Expecter) View(args interface{}) *MockWorkflow_View_Call {
+	return &MockWorkflow_View_Call{Call: _e.mock.On("View", args)}
+}
+
+func (_c *MockWorkflow_View_Call) Run(run func(args domain.ViewArgs)) *MockWorkflow_View_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(domain.ViewArgs))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_View_Call) Return(_a0 error) *MockWorkflow_View_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWorkflow_View_Call) RunAndReturn(run func(domain.ViewArgs) error) *MockWorkflow_View_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockWorkflow creates a new instance of MockWorkflow. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockWorkflow(t interface {

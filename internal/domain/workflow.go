@@ -3,6 +3,7 @@ package domain
 import (
 	"crypto/sha256"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -32,10 +33,16 @@ type TestArgs struct {
 	TotalShardCount int
 }
 
+// ViewArgs contains the arguments for viewing mutation test reports.
+type ViewArgs struct {
+	Reports m.Path
+}
+
 // Workflow defines the interface for the mutation testing workflow.
 type Workflow interface {
 	Estimate(args EstimateArgs) error
 	Test(args TestArgs) error
+	View(args ViewArgs) error
 }
 
 type workflow struct {
@@ -122,6 +129,90 @@ func (w *workflow) Test(args TestArgs) error {
 	w.Wait()
 
 	return nil
+}
+
+func (w *workflow) View(args ViewArgs) error {
+	if err := w.Start(controller.WithTestMode()); err != nil {
+		return err
+	}
+	defer w.Close()
+
+	reports, err := w.LoadReports(args.Reports)
+	if err != nil {
+		return fmt.Errorf("load reports: %w", err)
+	}
+
+	mutations, results := viewItemsFromReports(reports)
+	if len(mutations) == 0 {
+		return nil
+	}
+
+	w.DusplayUpcomingTestsInfo(len(mutations))
+
+	for i, mutation := range mutations {
+		w.DisplayStartingTestInfo(mutation, 0)
+		w.DisplayCompletedTestInfo(mutation, results[i])
+	}
+
+	w.Wait()
+
+	return nil
+}
+
+func viewItemsFromReports(reports []m.Report) ([]m.Mutation, []m.Result) {
+	mutations := make([]m.Mutation, 0)
+	results := make([]m.Result, 0)
+
+	for _, report := range reports {
+		if len(report.Result) == 0 {
+			continue
+		}
+
+		mutationTypes := make([]m.MutationType, 0, len(report.Result))
+		for mutationType := range report.Result {
+			mutationTypes = append(mutationTypes, mutationType)
+		}
+
+		sort.Slice(mutationTypes, func(i, j int) bool {
+			if mutationTypes[i].Name != mutationTypes[j].Name {
+				return mutationTypes[i].Name < mutationTypes[j].Name
+			}
+
+			return mutationTypes[i].Version < mutationTypes[j].Version
+		})
+
+		for _, mutationType := range mutationTypes {
+			entries := report.Result[mutationType]
+			for _, entry := range entries {
+				mutation := m.Mutation{
+					ID:     entry.MutationID,
+					Source: report.Source,
+					Type:   mutationType,
+				}
+				if entry.Status == m.Survived && report.Diff != nil {
+					mutation.DiffCode = *report.Diff
+				}
+
+				result := m.Result{}
+				result[mutationType] = []struct {
+					MutationID string
+					Status     m.TestStatus
+					Err        error
+				}{
+					{
+						MutationID: entry.MutationID,
+						Status:     entry.Status,
+						Err:        entry.Err,
+					},
+				}
+
+				mutations = append(mutations, mutation)
+				results = append(results, result)
+			}
+		}
+	}
+
+	return mutations, results
 }
 
 func (w *workflow) GetMutations(args EstimateArgs) ([]m.Mutation, error) {
