@@ -22,6 +22,9 @@ var mutagen domain.Mutagen
 var workflow domain.Workflow
 var ui controller.UI
 
+// reportsOutputDirFlag is a root-level flag shared by commands that read/write reports.
+var reportsOutputDirFlag string
+
 func init() {
 	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
@@ -71,6 +74,8 @@ func newRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+
+	cmd.PersistentFlags().StringVarP(&reportsOutputDirFlag, "output", "o", ".gooze-reports", "output directory for mutation testing reports")
 
 	return cmd
 }

@@ -201,8 +201,22 @@ func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Rep
 // LoadReports retrieves previously saved reports from disk.
 //
 // Note: This is currently a stub; report loading will be implemented later.
-func (rs *LocalReportStore) LoadReports(_ m.Path) ([]m.Report, error) {
-	return nil, nil
+func (rs *LocalReportStore) LoadReports(path m.Path) ([]m.Report, error) {
+	dirPath := string(path)
+	if dirPath == "" {
+		return nil, fmt.Errorf("reports directory path is required")
+	}
+
+	if err := rs.validateReportsDir(dirPath); err != nil {
+		return nil, err
+	}
+
+	reports, err := rs.loadReportsFromDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return reports, nil
 }
 
 func (rs *LocalReportStore) marshalReport(report m.Report) ([]byte, error) {
