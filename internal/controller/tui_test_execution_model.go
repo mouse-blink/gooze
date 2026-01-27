@@ -199,21 +199,36 @@ func (m testExecutionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.handleCompletedMutation(msg)
 
 	case concurrencyMsg:
-		m.threads = msg.threads
-		m.shardIndex = msg.shardIndex
-		m.totalShards = msg.shards
-		m.progressPercent = 0
+		m = m.handleConcurrency(msg)
 
 	case upcomingMsg:
-		m.totalMutations = msg.count
-		m.completedCount = 0
-		m.progressPercent = 0
-
-	case estimationMsg:
-		// Shouldn't happen in test execution model, but handle gracefully
+		m = m.handleUpcoming(msg)
 	}
 
 	return m, cmd
+}
+
+func (m testExecutionModel) handleConcurrency(msg concurrencyMsg) testExecutionModel {
+	m.threads = msg.threads
+	m.shardIndex = msg.shardIndex
+	m.totalShards = msg.shards
+	m.progressPercent = 0
+
+	return m
+}
+
+func (m testExecutionModel) handleUpcoming(msg upcomingMsg) testExecutionModel {
+	m.totalMutations = msg.count
+	m.completedCount = 0
+	m.progressPercent = 0
+	m.rendered = true
+
+	if msg.count == 0 {
+		m.testingFinished = true
+		m.progressPercent = 1.0
+	}
+
+	return m
 }
 
 func (m testExecutionModel) View() string {
@@ -573,6 +588,10 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 		if m.completedCount == m.totalMutations {
 			m.testingFinished = true
 		}
+	} else if m.totalMutations == 0 {
+		// If there are no mutations to test (e.g., due to caching), mark as finished immediately
+		m.testingFinished = true
+		m.progressPercent = 1.0
 	}
 
 	return m

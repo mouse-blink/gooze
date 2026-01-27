@@ -27,7 +27,8 @@ func newRunCmd() *cobra.Command {
 				EstimateArgs: domain.EstimateArgs{
 					Paths:    paths,
 					Exclude:  runExcludeFlags,
-					UseCache: false,
+					UseCache: true,
+					Reports:  m.Path(reportsOutputDirFlag),
 				},
 				Reports:         m.Path(reportsOutputDirFlag),
 				Threads:         runParallelFlag,

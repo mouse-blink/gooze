@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -163,9 +165,9 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	indexPath := filepath.Join(dir, "index.yaml")
+	indexPath := filepath.Join(dir, "_index.yaml")
 	if _, err := os.Stat(indexPath); err == nil {
-		t.Fatalf("expected index.yaml to not exist until RegenerateIndex is called")
+		t.Fatalf("expected _index.yaml to not exist until RegenerateIndex is called")
 	}
 
 	if err := rs.RegenerateIndex(m.Path(dir)); err != nil {
@@ -173,12 +175,12 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	}
 	data, err := os.ReadFile(indexPath)
 	if err != nil {
-		t.Fatalf("expected index.yaml to exist: %v", err)
+		t.Fatalf("expected _index.yaml to exist: %v", err)
 	}
 
 	var idx indexEntry
 	if err := yaml.Unmarshal(data, &idx); err != nil {
-		t.Fatalf("unmarshal index.yaml: %v", err)
+		t.Fatalf("unmarshal _index.yaml: %v", err)
 	}
 
 	if idx.TotalMutations != 3 {
@@ -240,5 +242,382 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	}
 	if len(reB.Mutations[0].MutationReports) != 1 || reB.Mutations[0].MutationReports[0] != file2 {
 		t.Fatalf("unexpected sourceB mutation_reports: %v", reB.Mutations[0].MutationReports)
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_NoReportsDir_ReturnsAllSources(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "does-not-exist")
+	rs := &LocalReportStore{}
+
+	sources := []m.Source{
+		{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "hash-a"}},
+		{Origin: &m.File{FullPath: m.Path("/abs/b.go"), Hash: "hash-b"}},
+	}
+
+	changed, err := rs.CheckUpdates(m.Path(dir), sources)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if !reflect.DeepEqual(changed, sources) {
+		t.Fatalf("changed sources = %#v, want %#v", changed, sources)
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_EmptyPath_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+	_, err := rs.CheckUpdates("", nil)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "reports directory path is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_PathIsFile_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	rs := &LocalReportStore{}
+	_, err := rs.CheckUpdates(m.Path(filePath), nil)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "path is not a directory") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_EmptyReportsDir_ReturnsAllSources(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	sources := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "hash-a"}}}
+	changed, err := rs.CheckUpdates(m.Path(dir), sources)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if !reflect.DeepEqual(changed, sources) {
+		t.Fatalf("changed sources = %#v, want %#v", changed, sources)
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_SourceDeleted_ReturnsMissingSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	deleted := m.Source{Origin: &m.File{FullPath: m.Path("/abs/deleted.go"), Hash: "old-hash"}}
+	report := m.Report{
+		Source: deleted,
+		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	changed, err := rs.CheckUpdates(m.Path(dir), nil)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed source, got %d", len(changed))
+	}
+	if changed[0].Origin == nil || changed[0].Origin.FullPath != deleted.Origin.FullPath {
+		t.Fatalf("expected deleted source %q, got %#v", deleted.Origin.FullPath, changed[0])
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_CodeOrTestChanged_ReturnsSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	old := m.Source{
+		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "old-code"},
+		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "old-test"},
+	}
+	report := m.Report{
+		Source: old,
+		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	current := []m.Source{{
+		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "new-code"},
+		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "old-test"},
+	}}
+
+	changed, err := rs.CheckUpdates(m.Path(dir), current)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed source, got %d", len(changed))
+	}
+	if changed[0].Origin == nil || changed[0].Origin.Hash != "new-code" {
+		t.Fatalf("expected returned source to be current, got %#v", changed[0])
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_TestFileAddedOrRemoved_ReturnsSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	// Stored run had a test file.
+	stored := m.Source{
+		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"},
+		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "test-hash"},
+	}
+	report := m.Report{
+		Source: stored,
+		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	// Current run has no test file associated.
+	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	changed, err := rs.CheckUpdates(m.Path(dir), current)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed source, got %d", len(changed))
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_NewMutator_ReturnsSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
+
+	// Previous run only had boolean mutations recorded.
+	report := m.Report{
+		Source: old,
+		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	changed, err := rs.CheckUpdates(m.Path(dir), current)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 0 {
+		t.Fatalf("expected 0 changed sources (new mutators don't trigger re-test), got %d", len(changed))
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_StoredHasUnknownMutator_ReturnsSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
+	unknown := m.MutationType{Name: "custom-mut", Version: 1}
+	report := m.Report{
+		Source: old,
+		Result: m.Result{unknown: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	changed, err := rs.CheckUpdates(m.Path(dir), current)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed source due to removed/unknown mutator, got %d", len(changed))
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_IgnoresSourcesWithNilOrigin(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "does-not-exist")
+	rs := &LocalReportStore{}
+
+	sources := []m.Source{{Origin: nil}}
+	changed, err := rs.CheckUpdates(m.Path(dir), sources)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected passthrough (no reports) to return all sources, got %d", len(changed))
+	}
+}
+
+func TestLocalReportStore_CleanReports_DeletesOnlySelectedAndRegeneratesIndex(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	sourceA := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "sourceA"}}
+	sourceB := m.Source{Origin: &m.File{FullPath: m.Path("/abs/b.go"), Hash: "sourceB"}}
+
+	reportA := m.Report{Source: sourceA, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed, Err: nil}}}}
+	reportB := m.Report{Source: sourceB, Result: m.Result{m.MutationArithmetic: {{MutationID: "a1", Status: m.Survived, Err: nil}}}}
+
+	if err := rs.SaveReports(m.Path(dir), []m.Report{reportA, reportB}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+	if err := rs.RegenerateIndex(m.Path(dir)); err != nil {
+		t.Fatalf("RegenerateIndex returned error: %v", err)
+	}
+
+	hashA := rs.computeReportHash(reportA.Result)
+	hashB := rs.computeReportHash(reportB.Result)
+	fileA := filepath.Join(dir, hashA+".yaml")
+	fileB := filepath.Join(dir, hashB+".yaml")
+
+	if _, err := os.Stat(fileA); err != nil {
+		t.Fatalf("expected report A file to exist: %v", err)
+	}
+	if _, err := os.Stat(fileB); err != nil {
+		t.Fatalf("expected report B file to exist: %v", err)
+	}
+	indexPath := filepath.Join(dir, "_index.yaml")
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("expected _index.yaml to exist: %v", err)
+	}
+
+	if err := rs.CleanReports(m.Path(dir), []m.Source{sourceA}); err != nil {
+		t.Fatalf("CleanReports returned error: %v", err)
+	}
+
+	if _, err := os.Stat(fileA); err == nil {
+		t.Fatalf("expected report A file to be deleted")
+	}
+	if _, err := os.Stat(fileB); err != nil {
+		t.Fatalf("expected report B file to remain: %v", err)
+	}
+
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read _index.yaml: %v", err)
+	}
+	var idx indexEntry
+	if err := yaml.Unmarshal(data, &idx); err != nil {
+		t.Fatalf("unmarshal _index.yaml: %v", err)
+	}
+	if len(idx.Result) != 1 {
+		t.Fatalf("expected 1 result entry after cleaning, got %d", len(idx.Result))
+	}
+	if idx.Result[0].SourceHex != "sourceB" {
+		t.Fatalf("expected remaining source to be sourceB, got %q", idx.Result[0].SourceHex)
+	}
+}
+
+func TestLocalReportStore_CleanReports_DeleteAll_RemovesIndex(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	sourceA := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "sourceA"}}
+	reportA := m.Report{Source: sourceA, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed, Err: nil}}}}
+
+	if err := rs.SaveReports(m.Path(dir), []m.Report{reportA}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+	if err := rs.RegenerateIndex(m.Path(dir)); err != nil {
+		t.Fatalf("RegenerateIndex returned error: %v", err)
+	}
+
+	hashA := rs.computeReportHash(reportA.Result)
+	fileA := filepath.Join(dir, hashA+".yaml")
+	indexPath := filepath.Join(dir, "_index.yaml")
+	if _, err := os.Stat(fileA); err != nil {
+		t.Fatalf("expected report file to exist: %v", err)
+	}
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("expected _index.yaml to exist: %v", err)
+	}
+
+	if err := rs.CleanReports(m.Path(dir), []m.Source{sourceA}); err != nil {
+		t.Fatalf("CleanReports returned error: %v", err)
+	}
+
+	if _, err := os.Stat(fileA); err == nil {
+		t.Fatalf("expected report file to be deleted")
+	}
+	if _, err := os.Stat(indexPath); err == nil {
+		t.Fatalf("expected _index.yaml to be deleted")
+	}
+}
+
+func TestLocalReportStore_CleanReports_NoReportsDir_NoError(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "does-not-exist")
+	rs := &LocalReportStore{}
+
+	if err := rs.CleanReports(m.Path(dir), nil); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestLocalReportStore_CleanReports_EmptyPath_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+	if err := rs.CleanReports("", nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_MutatorVersionDiff_ReturnsSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
+
+	// Simulate a stored report with an older boolean mutator version.
+	oldBool := m.MutationType{Name: m.MutationBoolean.Name, Version: 0}
+	report := m.Report{
+		Source: old,
+		Result: m.Result{oldBool: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+	}
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	changed, err := rs.CheckUpdates(m.Path(dir), current)
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed source due to mutator version diff, got %d", len(changed))
 	}
 }

@@ -20,6 +20,112 @@ func (_m *MockReportStore) EXPECT() *MockReportStore_Expecter {
 	return &MockReportStore_Expecter{mock: &_m.Mock}
 }
 
+// CheckUpdates provides a mock function with given fields: path, sources
+func (_m *MockReportStore) CheckUpdates(path model.Path, sources []model.Source) ([]model.Source, error) {
+	ret := _m.Called(path, sources)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckUpdates")
+	}
+
+	var r0 []model.Source
+	var r1 error
+	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) ([]model.Source, error)); ok {
+		return rf(path, sources)
+	}
+	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) []model.Source); ok {
+		r0 = rf(path, sources)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.Source)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(model.Path, []model.Source) error); ok {
+		r1 = rf(path, sources)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReportStore_CheckUpdates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CheckUpdates'
+type MockReportStore_CheckUpdates_Call struct {
+	*mock.Call
+}
+
+// CheckUpdates is a helper method to define mock.On call
+//   - path model.Path
+//   - sources []model.Source
+func (_e *MockReportStore_Expecter) CheckUpdates(path interface{}, sources interface{}) *MockReportStore_CheckUpdates_Call {
+	return &MockReportStore_CheckUpdates_Call{Call: _e.mock.On("CheckUpdates", path, sources)}
+}
+
+func (_c *MockReportStore_CheckUpdates_Call) Run(run func(path model.Path, sources []model.Source)) *MockReportStore_CheckUpdates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(model.Path), args[1].([]model.Source))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_CheckUpdates_Call) Return(_a0 []model.Source, _a1 error) *MockReportStore_CheckUpdates_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReportStore_CheckUpdates_Call) RunAndReturn(run func(model.Path, []model.Source) ([]model.Source, error)) *MockReportStore_CheckUpdates_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CleanReports provides a mock function with given fields: path, sources
+func (_m *MockReportStore) CleanReports(path model.Path, sources []model.Source) error {
+	ret := _m.Called(path, sources)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CleanReports")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) error); ok {
+		r0 = rf(path, sources)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReportStore_CleanReports_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CleanReports'
+type MockReportStore_CleanReports_Call struct {
+	*mock.Call
+}
+
+// CleanReports is a helper method to define mock.On call
+//   - path model.Path
+//   - sources []model.Source
+func (_e *MockReportStore_Expecter) CleanReports(path interface{}, sources interface{}) *MockReportStore_CleanReports_Call {
+	return &MockReportStore_CleanReports_Call{Call: _e.mock.On("CleanReports", path, sources)}
+}
+
+func (_c *MockReportStore_CleanReports_Call) Run(run func(path model.Path, sources []model.Source)) *MockReportStore_CleanReports_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(model.Path), args[1].([]model.Source))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_CleanReports_Call) Return(_a0 error) *MockReportStore_CleanReports_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReportStore_CleanReports_Call) RunAndReturn(run func(model.Path, []model.Source) error) *MockReportStore_CleanReports_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LoadReports provides a mock function with given fields: path
 func (_m *MockReportStore) LoadReports(path model.Path) ([]model.Report, error) {
 	ret := _m.Called(path)
