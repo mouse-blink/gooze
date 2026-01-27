@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mouse-blink/gooze/internal/domain"
+	m "github.com/mouse-blink/gooze/internal/model"
 )
 
 // listCmd represents the list command.
@@ -22,6 +23,7 @@ func newListCmd() *cobra.Command {
 				Paths:    paths,
 				Exclude:  listExcludeFlags,
 				UseCache: true,
+				Reports:  m.Path(reportsOutputDirFlag),
 			})
 		},
 	}

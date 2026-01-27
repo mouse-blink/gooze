@@ -39,7 +39,7 @@ gooze run ./...
 By default, Gooze writes mutation reports to `.gooze-reports` (override with `-o/--output`).
 
 - One YAML file per report: `<hash>.yaml`
-- An index file: `index.yaml`
+- An index file: `_index.yaml`
 
 View the last run:
 
@@ -52,6 +52,125 @@ Or point `view` at an explicit directory:
 ```bash
 gooze view -o .gooze-reports
 ```
+
+### Incremental runs
+
+Gooze supports incremental mutation testing by caching results and skipping unchanged files.
+
+**How it works:**
+
+1. After running tests, Gooze stores mutation results in the reports directory (default `.gooze-reports/`, configurable with `-o`) with source file hashes
+2. On subsequent runs, Gooze checks each source file:
+   - If source or test file content changed → re-run mutations
+   - If mutator versions changed → re-run mutations
+   - Otherwise → skip (use cached results)
+
+**Example**
+
+First run populates the cache:
+
+```bash
+gooze run ./...
+```
+
+Make a small change to a single file:
+
+```bash
+echo "// comment" >> main.go
+```
+
+Second run re-tests only affected sources and reuses cached results for everything else:
+
+```bash
+gooze run ./...
+```
+
+**Cache invalidation triggers:**
+- Source file content hash changed
+- Test file content hash changed
+- Mutator version changed (e.g., after upgrading Gooze)
+- Source file deleted
+
+### Using ORAS for report storage
+
+Store and retrieve mutation reports as OCI artifacts using [ORAS](https://oras.land/).
+
+**Push reports to registry:**
+
+Run mutation testing and write reports to `.gooze-reports`:
+
+```bash
+gooze run -o .gooze-reports ./...
+```
+
+Package reports into a single archive (this avoids nested paths on pull):
+
+```bash
+tar -C .gooze-reports -czf gooze-reports.tgz .
+```
+
+Push the archive as an OCI artifact:
+
+```bash
+oras push ghcr.io/your-org/your-repo/gooze-reports:main \
+   gooze-reports.tgz:application/gzip
+
+rm -f gooze-reports.tgz
+```
+
+**Pull reports from registry:**
+
+Pull the artifact to a staging directory:
+
+```bash
+rm -rf /tmp/gooze-reports-oci && mkdir -p /tmp/gooze-reports-oci
+oras pull ghcr.io/your-org/your-repo/gooze-reports:main -o /tmp/gooze-reports-oci
+```
+
+Restore into the reports directory Gooze reads from:
+
+```bash
+rm -rf .gooze-reports && mkdir -p .gooze-reports
+tar -C .gooze-reports -xzf /tmp/gooze-reports-oci/gooze-reports.tgz
+```
+
+View the pulled reports:
+
+```bash
+gooze view -o .gooze-reports
+```
+
+**Incremental testing with OCI artifacts:**
+
+In CI, restore baseline reports first:
+
+```bash
+rm -rf /tmp/gooze-reports-oci && mkdir -p /tmp/gooze-reports-oci
+oras pull ghcr.io/your-org/your-repo/gooze-reports:main -o /tmp/gooze-reports-oci
+rm -rf .gooze-reports && mkdir -p .gooze-reports
+tar -C .gooze-reports -xzf /tmp/gooze-reports-oci/gooze-reports.tgz
+```
+
+Then run mutation testing; only changed sources will be re-tested:
+
+```bash
+gooze run -o .gooze-reports ./...
+```
+
+Finally, package and push the updated reports:
+
+```bash
+tar -C .gooze-reports -czf gooze-reports.tgz .
+oras push ghcr.io/your-org/your-repo/gooze-reports:feature-branch \
+   gooze-reports.tgz:application/gzip
+rm -f gooze-reports.tgz
+```
+
+**Benefits:**
+- Reuse cached results across CI runs
+- Speed up branch testing by reusing main branch results
+- Version and track mutation test results alongside code
+- Share baseline reports across team members
 
 #### Sharded runs and merging
 
@@ -140,10 +259,10 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 - [x] Automatic report merging from multiple shards (`gooze merge`)
 
 ### Reporting
-- [ ] OCI artifact-based reports stored as container images
+- [x] Incremental testing: cache and reuse results for unchanged files
 - [x] Per-file mutation reports for granular analysis
-- [x] Index file with summary (`index.yaml`)
-- [ ] Incremental testing: merge branch results with master OCI artifacts for unchanged files
+- [x] Index file with summary (`_index.yaml`)
+- [ ] OCI artifact integration with automated push/pull workflows
 
 ### CI/CD Integration
 - [ ] GitHub Actions workflow templates

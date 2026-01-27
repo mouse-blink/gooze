@@ -28,6 +28,7 @@ type EstimateArgs struct {
 	Paths    []m.Path
 	Exclude  []string
 	UseCache bool
+	Reports  m.Path
 }
 
 // TestArgs contains the arguments for running mutation tests.
@@ -176,36 +177,94 @@ func (w *workflow) Merge(args MergeArgs) error {
 		return fmt.Errorf("reports directory path is required")
 	}
 
-	shardDirs, err := findShardDirs(string(base))
+	shardDirs, err := w.findShardDirs(base)
 	if err != nil {
-		return fmt.Errorf("find shard directories: %w", err)
+		return err
 	}
 
 	if len(shardDirs) == 0 {
-		if err := w.RegenerateIndex(base); err != nil {
-			return fmt.Errorf("regenerate index: %w", err)
-		}
-
-		return nil
+		return w.regenerateIndex(base)
 	}
 
+	merged, err := w.mergeReports(base, shardDirs)
+	if err != nil {
+		return err
+	}
+
+	if err := w.saveMergedReports(base, merged); err != nil {
+		return err
+	}
+
+	return w.removeShardDirs(shardDirs)
+}
+
+func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
+	shardDirs, err := findShardDirs(string(base))
+	if err != nil {
+		return nil, fmt.Errorf("find shard directories: %w", err)
+	}
+
+	return shardDirs, nil
+}
+
+func (w *workflow) regenerateIndex(base m.Path) error {
+	if err := w.RegenerateIndex(base); err != nil {
+		return fmt.Errorf("regenerate index: %w", err)
+	}
+
+	return nil
+}
+
+func (w *workflow) mergeReports(base m.Path, shardDirs []string) ([]m.Report, error) {
 	merged := make([]m.Report, 0)
 
+	// First, load existing reports from base directory to preserve cache.
+	existingReports, err := w.loadReportsIfExists(base)
+	if err != nil {
+		return nil, fmt.Errorf("load existing reports from base: %w", err)
+	}
+
+	merged = append(merged, existingReports...)
+
+	// Then load and merge reports from all shards.
 	for _, shardDir := range shardDirs {
 		reports, err := w.LoadReports(m.Path(shardDir))
 		if err != nil {
-			return fmt.Errorf("load shard reports from %s: %w", shardDir, err)
+			return nil, fmt.Errorf("load shard reports from %s: %w", shardDir, err)
 		}
 
 		merged = append(merged, reports...)
 	}
 
-	if err := w.SaveReports(base, merged); err != nil {
+	return merged, nil
+}
+
+func (w *workflow) loadReportsIfExists(path m.Path) ([]m.Report, error) {
+	reports, err := w.LoadReports(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return reports, nil
+}
+
+func (w *workflow) saveMergedReports(base m.Path, reports []m.Report) error {
+	if err := w.SaveReports(base, reports); err != nil {
 		return fmt.Errorf("save merged reports: %w", err)
 	}
 
-	if err := w.RegenerateIndex(base); err != nil {
-		return fmt.Errorf("regenerate index: %w", err)
+	return w.regenerateIndex(base)
+}
+
+func (w *workflow) removeShardDirs(shardDirs []string) error {
+	for _, shardDir := range shardDirs {
+		if err := os.RemoveAll(shardDir); err != nil {
+			return fmt.Errorf("remove shard directory %s: %w", shardDir, err)
+		}
 	}
 
 	return nil
@@ -319,7 +378,7 @@ func (w *workflow) GetMutations(args EstimateArgs) ([]m.Mutation, error) {
 		return nil, fmt.Errorf("get sources: %w", err)
 	}
 
-	changedSSources, err := w.GetChangedSources(sources)
+	changedSSources, err := w.GetChangedSources(args, sources)
 	if err != nil {
 		return nil, fmt.Errorf("get changed sources: %w", err)
 	}
@@ -332,9 +391,61 @@ func (w *workflow) GetMutations(args EstimateArgs) ([]m.Mutation, error) {
 	return allMutations, nil
 }
 
-func (w *workflow) GetChangedSources(sources []m.Source) ([]m.Source, error) {
-	// Placeholder for future implementation
-	return sources, nil
+func (w *workflow) GetChangedSources(args EstimateArgs, sources []m.Source) ([]m.Source, error) {
+	if !args.UseCache {
+		return sources, nil
+	}
+
+	if args.Reports == "" {
+		return sources, nil
+	}
+
+	changed, err := w.CheckUpdates(args.Reports, sources)
+	if err != nil {
+		return nil, err
+	}
+
+	currentByPath := w.buildSourcePathMap(sources)
+	deleted, changedExisting := w.separateDeletedAndChanged(changed, currentByPath)
+
+	if len(deleted) > 0 {
+		if err := w.CleanReports(args.Reports, deleted); err != nil {
+			return nil, err
+		}
+	}
+
+	return changedExisting, nil
+}
+
+func (w *workflow) buildSourcePathMap(sources []m.Source) map[string]m.Source {
+	currentByPath := map[string]m.Source{}
+
+	for _, src := range sources {
+		if src.Origin != nil && src.Origin.FullPath != "" {
+			currentByPath[string(src.Origin.FullPath)] = src
+		}
+	}
+
+	return currentByPath
+}
+
+func (w *workflow) separateDeletedAndChanged(changed []m.Source, currentByPath map[string]m.Source) ([]m.Source, []m.Source) {
+	deleted := make([]m.Source, 0)
+	changedExisting := make([]m.Source, 0)
+
+	for _, src := range changed {
+		if src.Origin == nil || src.Origin.FullPath == "" {
+			continue
+		}
+
+		if current, ok := currentByPath[string(src.Origin.FullPath)]; ok {
+			changedExisting = append(changedExisting, current)
+		} else {
+			deleted = append(deleted, src)
+		}
+	}
+
+	return deleted, changedExisting
 }
 
 func (w *workflow) GenerateAllMutations(sources []m.Source) ([]m.Mutation, error) {

@@ -15,11 +15,15 @@ import (
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
+const indexFileName = "_index.yaml"
+
 // ReportStore persists and retrieves mutation reports.
 type ReportStore interface {
 	SaveReports(path m.Path, reports []m.Report) error
 	RegenerateIndex(path m.Path) error
 	LoadReports(path m.Path) ([]m.Report, error)
+	CheckUpdates(path m.Path, sources []m.Source) ([]m.Source, error)
+	CleanReports(path m.Path, sources []m.Source) error
 }
 
 // LocalReportStore is the concrete implementation that will back the
@@ -110,7 +114,7 @@ func (rs *LocalReportStore) SaveReports(path m.Path, reports []m.Report) error {
 	return nil
 }
 
-// RegenerateIndex rebuilds and writes `index.yaml` from the report files in `path`.
+// RegenerateIndex rebuilds and writes `_index.yaml` from the report files in `path`.
 func (rs *LocalReportStore) RegenerateIndex(path m.Path) error {
 	dirPath := string(path)
 	if dirPath == "" {
@@ -178,7 +182,7 @@ func (rs *LocalReportStore) loadReportsFromDir(dirPath string) ([]m.Report, erro
 }
 
 func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Report) error {
-	indexPath := filepath.Join(dirPath, "index.yaml")
+	indexPath := filepath.Join(dirPath, indexFileName)
 	if len(reports) == 0 {
 		_ = os.Remove(indexPath)
 		return nil
@@ -217,6 +221,306 @@ func (rs *LocalReportStore) LoadReports(path m.Path) ([]m.Report, error) {
 	}
 
 	return reports, nil
+}
+
+type storedSourceState struct {
+	source  m.Source
+	mutator map[string]int
+}
+
+// CleanReports deletes stored report files that belong to the provided sources.
+// It is safe to call when the reports directory does not exist.
+func (rs *LocalReportStore) CleanReports(path m.Path, sources []m.Source) error {
+	dirPath := string(path)
+	if dirPath == "" {
+		return fmt.Errorf("reports directory path is required")
+	}
+
+	exists, err := rs.reportsDirExists(dirPath)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	toCleanPaths, toCleanHashes := rs.buildCleanMatchers(sources)
+	if len(toCleanPaths) == 0 && len(toCleanHashes) == 0 {
+		return nil
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return fmt.Errorf("read reports directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if err := rs.cleanReportFile(dirPath, entry, toCleanPaths, toCleanHashes); err != nil {
+			return err
+		}
+	}
+
+	return rs.RegenerateIndex(path)
+}
+
+func (rs *LocalReportStore) cleanReportFile(dirPath string, entry os.DirEntry, toCleanPaths map[string]bool, toCleanHashes map[string]bool) error {
+	if !rs.shouldLoadReportEntry(entry) {
+		return nil
+	}
+
+	filePath := filepath.Join(dirPath, entry.Name())
+	// #nosec G304 -- filePath is built from a trusted reports directory listing
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("read report file %s: %w", filePath, err)
+	}
+
+	report, err := rs.unmarshalReport(data)
+	if err != nil {
+		return fmt.Errorf("unmarshal report file %s: %w", filePath, err)
+	}
+
+	if !rs.shouldCleanReport(report.Source, toCleanPaths, toCleanHashes) {
+		return nil
+	}
+
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove report file %s: %w", filePath, err)
+	}
+
+	return nil
+}
+
+func (rs *LocalReportStore) buildCleanMatchers(sources []m.Source) (map[string]bool, map[string]bool) {
+	paths := make(map[string]bool)
+	hashes := make(map[string]bool)
+
+	for _, src := range sources {
+		if src.Origin == nil {
+			continue
+		}
+
+		if src.Origin.FullPath != "" {
+			paths[string(src.Origin.FullPath)] = true
+		}
+
+		if src.Origin.Hash != "" {
+			hashes[src.Origin.Hash] = true
+		}
+	}
+
+	return paths, hashes
+}
+
+func (rs *LocalReportStore) shouldCleanReport(source m.Source, toCleanPaths map[string]bool, toCleanHashes map[string]bool) bool {
+	if source.Origin == nil {
+		return false
+	}
+
+	if source.Origin.FullPath != "" {
+		if toCleanPaths[string(source.Origin.FullPath)] {
+			return true
+		}
+	}
+
+	if source.Origin.Hash != "" {
+		if toCleanHashes[source.Origin.Hash] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// CheckUpdates returns sources that should be re-tested because:
+// - the source file is deleted (present in stored reports but not in current `sources`)
+// - source/test content hash changed
+// - the current mutator set or versions differ from what was used to generate stored reports.
+func (rs *LocalReportStore) CheckUpdates(path m.Path, sources []m.Source) ([]m.Source, error) {
+	dirPath := string(path)
+	if dirPath == "" {
+		return nil, fmt.Errorf("reports directory path is required")
+	}
+
+	exists, err := rs.reportsDirExists(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		// No prior reports: everything is effectively changed.
+		return sources, nil
+	}
+
+	reports, err := rs.loadReportsFromDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	stored := rs.buildStoredSourceState(reports)
+	currentByPath := rs.buildCurrentSourceMap(sources)
+	changed := rs.findChangedSources(stored, currentByPath)
+
+	return changed, nil
+}
+
+func (rs *LocalReportStore) buildCurrentSourceMap(sources []m.Source) map[string]m.Source {
+	currentByPath := map[string]m.Source{}
+
+	for _, src := range sources {
+		if src.Origin == nil || src.Origin.FullPath == "" {
+			continue
+		}
+
+		currentByPath[string(src.Origin.FullPath)] = src
+	}
+
+	return currentByPath
+}
+
+func (rs *LocalReportStore) findChangedSources(stored map[string]storedSourceState, currentByPath map[string]m.Source) []m.Source {
+	changed := make([]m.Source, 0)
+	visited := make(map[string]bool, len(currentByPath))
+
+	for pathStr, current := range currentByPath {
+		visited[pathStr] = true
+		if rs.isSourceChanged(stored, pathStr, current) {
+			changed = append(changed, current)
+		}
+	}
+
+	// Find deleted sources
+	for pathStr, st := range stored {
+		if !visited[pathStr] {
+			changed = append(changed, st.source)
+		}
+	}
+
+	return changed
+}
+
+func (rs *LocalReportStore) isSourceChanged(stored map[string]storedSourceState, pathStr string, current m.Source) bool {
+	st, ok := stored[pathStr]
+	if !ok {
+		return true
+	}
+
+	if rs.sourceHashChanged(st.source, current) {
+		return true
+	}
+
+	return rs.mutatorsChanged(st.mutator)
+}
+
+func (rs *LocalReportStore) buildStoredSourceState(reports []m.Report) map[string]storedSourceState {
+	state := make(map[string]storedSourceState)
+
+	for _, report := range reports {
+		if report.Source.Origin == nil || report.Source.Origin.FullPath == "" {
+			continue
+		}
+
+		key := string(report.Source.Origin.FullPath)
+
+		st, ok := state[key]
+		if !ok {
+			st = storedSourceState{source: report.Source, mutator: map[string]int{}}
+		}
+
+		// Keep the most recently seen Source metadata (hashes), but they should be consistent.
+		st.source = report.Source
+
+		for mt := range report.Result {
+			if existing, ok := st.mutator[mt.Name]; ok && existing != mt.Version {
+				// Version mismatch across reports - mark as needing update
+				// Use -1 as a sentinel to indicate inconsistency
+				st.mutator[mt.Name] = -1
+			} else if !ok {
+				st.mutator[mt.Name] = mt.Version
+			}
+		}
+
+		state[key] = st
+	}
+
+	return state
+}
+
+func (rs *LocalReportStore) sourceHashChanged(stored m.Source, current m.Source) bool {
+	storedOriginHash := ""
+	currentOriginHash := ""
+
+	if stored.Origin != nil {
+		storedOriginHash = stored.Origin.Hash
+	}
+
+	if current.Origin != nil {
+		currentOriginHash = current.Origin.Hash
+	}
+
+	if storedOriginHash != currentOriginHash {
+		return true
+	}
+
+	storedTestHash := ""
+	currentTestHash := ""
+
+	if stored.Test != nil {
+		storedTestHash = stored.Test.Hash
+	}
+
+	if current.Test != nil {
+		currentTestHash = current.Test.Hash
+	}
+
+	if storedTestHash != currentTestHash {
+		return true
+	}
+
+	return false
+}
+
+func (rs *LocalReportStore) mutatorsChanged(stored map[string]int) bool {
+	current := currentMutationVersions()
+
+	// Check if any mutator versions changed for mutators that were stored
+	for name, storedVersion := range stored {
+		// -1 indicates version mismatch across reports - needs re-run
+		if storedVersion == -1 {
+			return true
+		}
+
+		currentVersion, ok := current[name]
+		if !ok {
+			return true
+		}
+
+		if storedVersion != currentVersion {
+			return true
+		}
+	}
+
+	return false
+}
+
+func currentMutationVersions() map[string]int {
+	// Keep in sync with supported mutation types.
+	mutations := []m.MutationType{
+		m.MutationArithmetic,
+		m.MutationBoolean,
+		m.MutationNumbers,
+		m.MutationComparison,
+		m.MutationLogical,
+		m.MutationUnary,
+	}
+
+	out := make(map[string]int, len(mutations))
+	for _, mt := range mutations {
+		out[mt.Name] = mt.Version
+	}
+
+	return out
 }
 
 func (rs *LocalReportStore) marshalReport(report m.Report) ([]byte, error) {
@@ -477,7 +781,7 @@ func (rs *LocalReportStore) shouldLoadReportEntry(entry os.DirEntry) bool {
 	}
 
 	name := entry.Name()
-	if name == "index.yaml" {
+	if name == indexFileName {
 		return false
 	}
 
