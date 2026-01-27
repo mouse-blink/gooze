@@ -7,6 +7,8 @@ into your Go source and running tests to see which changes are caught. It suppor
 Go path patterns (like `./...`) for fast targeting and can parallelize mutation runs
 to speed up larger projects.
 
+**Choosing a tool?** See [COMPARISON.md](./COMPARISON.md).
+
 ## Quick Start
 
 ### Install
@@ -244,6 +246,13 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 - [ ] Concurrency & Channels
 
 ## Roadmap
+
+### Core Features
+- [ ] **Annotation Skipping**: Support `//gooze:ignore` comments to skip specific blocks or lines (Medium)
+- [ ] **Custom Exec Hook**: Support custom test runner commands similar to `go-mutesting --exec` (High)
+- [ ] **Function Selection**: Allow mutating specific functions/methods via regex (High)
+- [ ] **Timeouts**: Per-mutation execution budgets to prevent infinite loops (Medium)
+- [ ] **Config File**: Support `.gooze.yml` for persistent configuration (Medium)
 
 ### Smart Test Execution
 - [x] Run only matching `*_test.go` files for each mutated source file
