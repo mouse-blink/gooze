@@ -135,6 +135,61 @@ func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
 	}
 }
 
+func TestMutagen_GenerateMutation_Ignore_FileLevel_ByMutagenName(t *testing.T) {
+	mg := newTestMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "file_ignore.go"))
+
+	mutationsArithmetic, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	if err != nil {
+		t.Fatalf("GenerateMutation(arithmetic) failed: %v", err)
+	}
+	if len(mutationsArithmetic) != 0 {
+		t.Fatalf("expected 0 arithmetic mutations due to file-level ignore, got %d", len(mutationsArithmetic))
+	}
+
+	mutationsNumbers, err := mg.GenerateMutation(source, m.MutationNumbers)
+	if err != nil {
+		t.Fatalf("GenerateMutation(numbers) failed: %v", err)
+	}
+	if len(mutationsNumbers) == 0 {
+		t.Fatalf("expected numbers mutations to still be generated")
+	}
+}
+
+func TestMutagen_GenerateMutation_Ignore_FunctionLevel_AllMutagens(t *testing.T) {
+	mg := newTestMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "func_ignore.go"))
+
+	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	if err != nil {
+		t.Fatalf("GenerateMutation failed: %v", err)
+	}
+
+	// Each arithmetic binary expr yields 4 mutations (all other arithmetic ops).
+	// File has two identical exprs, but one function is ignored => only 4 mutations.
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 arithmetic mutations (one function ignored), got %d", len(mutations))
+	}
+}
+
+func TestMutagen_GenerateMutation_Ignore_LineLevel_TrailingComment_ByMutagenName(t *testing.T) {
+	mg := newTestMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "line_ignore.go"))
+
+	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	if err != nil {
+		t.Fatalf("GenerateMutation failed: %v", err)
+	}
+
+	// Two arithmetic expr lines exist, but one is ignored for arithmetic => 4 mutations.
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 arithmetic mutations (one line ignored), got %d", len(mutations))
+	}
+}
+
 func makeSourceV2(t *testing.T, path string) m.Source {
 	t.Helper()
 
