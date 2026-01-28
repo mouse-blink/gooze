@@ -124,6 +124,8 @@ type testExecutionModel struct {
 	currentMutationID string
 	currentType       string
 	currentStatus     string
+	mutationScore     float64
+	mutationScoreSet  bool
 	totalMutations    int
 	completedCount    int
 	progressPercent   float64
@@ -203,6 +205,10 @@ func (m testExecutionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case upcomingMsg:
 		m = m.handleUpcoming(msg)
+
+	case mutationScoreMsg:
+		m.mutationScore = msg.score
+		m.mutationScoreSet = true
 	}
 
 	return m, cmd
@@ -388,13 +394,18 @@ func (m testExecutionModel) viewResults() string {
 	title := titleStyle.Render("🧬 Gooze Test Results")
 
 	// 2. Summary
-	summary := summaryStyle.Render(fmt.Sprintf(
-		"Total: %s  •  Killed: %s  •  Survived: %s  •  Errors: %s",
-		accentStyle.Render(fmt.Sprintf("%d", len(m.results))),
-		accentStyle.Render(fmt.Sprintf("%d", m.countStatus("killed"))),
-		accentStyle.Render(fmt.Sprintf("%d", m.countStatus("survived"))),
-		accentStyle.Render(fmt.Sprintf("%d", m.countStatus("error"))),
-	))
+	summaryParts := []string{
+		fmt.Sprintf("Total: %s", accentStyle.Render(fmt.Sprintf("%d", len(m.results)))),
+		fmt.Sprintf("Killed: %s", accentStyle.Render(fmt.Sprintf("%d", m.countStatus("killed")))),
+		fmt.Sprintf("Survived: %s", accentStyle.Render(fmt.Sprintf("%d", m.countStatus("survived")))),
+		fmt.Sprintf("Errors: %s", accentStyle.Render(fmt.Sprintf("%d", m.countStatus("error")))),
+	}
+
+	if m.mutationScoreSet {
+		summaryParts = append(summaryParts, fmt.Sprintf("Score: %s", accentStyle.Render(fmt.Sprintf("%.2f%%", m.mutationScore*100))))
+	}
+
+	summary := summaryStyle.Render(strings.Join(summaryParts, "  •  "))
 
 	// 3. Results table with list
 	resultsBox := m.renderResultsBox(accentColor)

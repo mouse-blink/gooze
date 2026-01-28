@@ -77,8 +77,8 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	ui.Wait()
 	ui.Close()
 
-	ui.DisplayConcurencyInfo(3, 1, 2)
-	ui.DusplayUpcomingTestsInfo(7)
+	ui.DisplayConcurrencyInfo(3, 1, 2)
+	ui.DisplayUpcomingTestsInfo(7)
 	ui.DisplayStartingTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, 0)
 	ui.DisplayStartingTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
 
@@ -96,6 +96,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	}
 	ui.DisplayCompletedTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, result)
 	ui.DisplayCompletedTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
+	ui.DisplayMutationScore(0.75)
 
 	output := buf.String()
 	for _, want := range []string{
@@ -107,6 +108,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 		"Completed mutation efgh (boolean) -> survived",
 		"File: path/a.go",
 		"--- original",
+		"Mutation score: 75.00%",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)
