@@ -179,12 +179,13 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 		t.Fatalf("DisplayEstimation with mutations error = %v", err)
 	}
 
-	tui.DisplayConcurencyInfo(2, 1, 3)
-	tui.DusplayUpcomingTestsInfo(5)
+	tui.DisplayConcurrencyInfo(2, 1, 3)
+	tui.DisplayUpcomingTestsInfo(5)
 	tui.DisplayStartingTestInfo(mutationWithOrigin(), 7)
 	tui.DisplayStartingTestInfo(mutationWithoutOrigin(), 8)
 	tui.DisplayCompletedTestInfo(mutationWithOrigin(), completedResult())
 	tui.DisplayCompletedTestInfo(mutationWithoutOrigin(), mResultEmpty())
+	tui.DisplayMutationScore(0.5)
 }
 
 var errSentinel = errors.New("boom")

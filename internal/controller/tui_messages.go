@@ -40,6 +40,10 @@ type concurrencyMsg struct {
 	shards     int
 }
 
+type mutationScoreMsg struct {
+	score float64
+}
+
 // List item types.
 type fileItem struct {
 	path  string

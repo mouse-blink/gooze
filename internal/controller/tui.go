@@ -138,14 +138,14 @@ func (t *TUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 	return nil
 }
 
-// DisplayConcurencyInfo shows concurrency settings.
-func (t *TUI) DisplayConcurencyInfo(threads int, shardIndex int, count int) {
+// DisplayConcurrencyInfo shows concurrency settings.
+func (t *TUI) DisplayConcurrencyInfo(threads int, shardIndex int, count int) {
 	t.ensureStarted()
 	t.send(concurrencyMsg{threads: threads, shardIndex: shardIndex, shards: count})
 }
 
-// DusplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
-func (t *TUI) DusplayUpcomingTestsInfo(i int) {
+// DisplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
+func (t *TUI) DisplayUpcomingTestsInfo(i int) {
 	t.ensureStarted()
 	t.send(upcomingMsg{count: i})
 }
@@ -201,6 +201,12 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 		status:      status,
 		diff:        diff,
 	})
+}
+
+// DisplayMutationScore shows the final mutation score.
+func (t *TUI) DisplayMutationScore(score float64) {
+	t.ensureStarted()
+	t.send(mutationScoreMsg{score: score})
 }
 
 func (t *TUI) ensureStarted() {

@@ -49,8 +49,9 @@ type UI interface {
 	Close()
 	Wait() // Wait for UI to finish (user closes it)
 	DisplayEstimation(mutations []m.Mutation, err error) error
-	DisplayConcurencyInfo(threads int, shardIndex int, shardCount int)
-	DusplayUpcomingTestsInfo(i int)
+	DisplayConcurrencyInfo(threads int, shardIndex int, shardCount int)
+	DisplayUpcomingTestsInfo(i int)
 	DisplayStartingTestInfo(currentMutation m.Mutation, threadID int)
 	DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result)
+	DisplayMutationScore(score float64)
 }

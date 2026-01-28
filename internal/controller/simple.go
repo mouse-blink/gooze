@@ -96,13 +96,13 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 	return nil
 }
 
-// DisplayConcurencyInfo shows concurrency settings.
-func (s *SimpleUI) DisplayConcurencyInfo(threads int, shardIndex int, count int) {
+// DisplayConcurrencyInfo shows concurrency settings.
+func (s *SimpleUI) DisplayConcurrencyInfo(threads int, shardIndex int, count int) {
 	s.printf("Running %d mutations with %d worker(s) (Shard %d/%d)\n", count, threads, shardIndex, count)
 }
 
-// DusplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
-func (s *SimpleUI) DusplayUpcomingTestsInfo(i int) {
+// DisplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
+func (s *SimpleUI) DisplayUpcomingTestsInfo(i int) {
 	s.printf("Upcoming mutations: %d\n", i)
 }
 
@@ -137,6 +137,11 @@ func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutation
 
 		s.printf("%s\n", currentMutation.DiffCode)
 	}
+}
+
+// DisplayMutationScore prints the final mutation score.
+func (s *SimpleUI) DisplayMutationScore(score float64) {
+	s.printf("Mutation score: %.2f%%\n", score*100)
 }
 
 func (s *SimpleUI) printf(format string, args ...interface{}) {

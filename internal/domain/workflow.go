@@ -109,7 +109,7 @@ func (w *workflow) Estimate(args EstimateArgs) error {
 
 func (w *workflow) Test(args TestArgs) error {
 	return w.withTestUI(func() error {
-		w.DisplayConcurencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
+		w.DisplayConcurrencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
@@ -119,12 +119,14 @@ func (w *workflow) Test(args TestArgs) error {
 		}
 
 		shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
-		w.DusplayUpcomingTestsInfo(len(shardMutations))
+		w.DisplayUpcomingTestsInfo(len(shardMutations))
 
 		reports, err := w.TestReports(shardMutations, args.Threads)
 		if err != nil {
 			return fmt.Errorf("run mutation tests: %w", err)
 		}
+
+		w.DisplayMutationScore(mutationScoreFromReports(reports))
 
 		err = w.SaveReports(reportsDir, reports)
 		if err != nil {
@@ -156,19 +158,47 @@ func (w *workflow) View(args ViewArgs) error {
 		}
 
 		mutations, results := viewItemsFromReports(reports)
-		if len(mutations) == 0 {
-			return nil
-		}
 
-		w.DusplayUpcomingTestsInfo(len(mutations))
+		score := mutationScoreFromReports(reports)
+
+		w.DisplayUpcomingTestsInfo(len(mutations))
 
 		for i, mutation := range mutations {
 			w.DisplayStartingTestInfo(mutation, 0)
 			w.DisplayCompletedTestInfo(mutation, results[i])
 		}
 
+		w.DisplayMutationScore(score)
+
 		return nil
 	})
+}
+
+func mutationScoreFromReports(reports []m.Report) float64 {
+	killed := 0
+	total := 0
+
+	for _, report := range reports {
+		for _, entries := range report.Result {
+			for _, entry := range entries {
+				switch entry.Status {
+				case m.Killed:
+					killed++
+					total++
+				case m.Survived:
+					total++
+				case m.Skipped, m.Error:
+					// Skipped/error entries are excluded from the score denominator.
+				}
+			}
+		}
+	}
+
+	if total == 0 {
+		return 0
+	}
+
+	return float64(killed) / float64(total)
 }
 
 func (w *workflow) Merge(args MergeArgs) error {
@@ -583,5 +613,8 @@ func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
 		}
 	}
 
-	return entries[0].Status
+	// If the orchestrator returned entries for a different mutation ID, do not
+	// guess: treating it as an error avoids inflating the score and attaching an
+	// incorrect diff.
+	return m.Error
 }
