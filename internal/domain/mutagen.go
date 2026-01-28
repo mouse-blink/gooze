@@ -105,32 +105,64 @@ func (mg *mutagen) loadSourceAST(source m.Source) ([]byte, *token.FileSet, *ast.
 }
 
 func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+	ignore := buildIgnoreIndex(file, fset, content)
+	if ignore.file.ignores(mutationType) {
+		return nil
+	}
+
 	mutations := make([]m.Mutation, 0)
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		switch mutationType {
-		case m.MutationArithmetic:
-			mutations = append(mutations, mutagens.GenerateArithmeticMutations(n, fset, content, source)...)
-		case m.MutationBoolean:
-			mutations = append(mutations, mutagens.GenerateBooleanMutations(n, fset, content, source)...)
-		case m.MutationNumbers:
-			mutations = append(mutations, mutagens.GenerateNumberMutations(n, fset, content, source)...)
-		case m.MutationComparison:
-			mutations = append(mutations, mutagens.GenerateComparisonMutations(n, fset, content, source)...)
-		case m.MutationLogical:
-			mutations = append(mutations, mutagens.GenerateLogicalMutations(n, fset, content, source)...)
-		case m.MutationUnary:
-			mutations = append(mutations, mutagens.GenerateUnaryMutations(n, fset, content, source)...)
-		case m.MutationBranch:
-			mutations = append(mutations, mutagens.GenerateBranchMutations(n, fset, content, source)...)
-		case m.MutationStatement:
-			mutations = append(mutations, mutagens.GenerateStatementMutations(n, fset, content, source)...)
-		case m.MutationLoop:
-			mutations = append(mutations, mutagens.GenerateLoopMutations(n, fset, content, source)...)
+		if n == nil {
+			return true
 		}
+
+		// Function-level ignore: if the annotation is directly above the func decl,
+		// skip traversing the function body entirely.
+		if fd, ok := n.(*ast.FuncDecl); ok {
+			if rule, ok := ignore.funcByPos[fd.Pos()]; ok && rule.ignores(mutationType) {
+				return false
+			}
+		}
+
+		// Line-level ignore: if the annotation is on the same line (trailing) or
+		// on the line above (leading), skip generating mutations for this node.
+		line := fset.PositionFor(n.Pos(), true).Line
+		if rule, ok := ignore.line[line]; ok && rule.ignores(mutationType) {
+			return true
+		}
+
+		mutations = append(mutations, generateMutationsForNode(mutationType, n, fset, content, source)...)
 
 		return true
 	})
 
 	return mutations
+}
+
+var mutationGenerators = map[m.MutationType]func(ast.Node, *token.FileSet, []byte, m.Source) []m.Mutation{
+	m.MutationArithmetic: mutagens.GenerateArithmeticMutations,
+	m.MutationBoolean:    mutagens.GenerateBooleanMutations,
+	m.MutationNumbers:    mutagens.GenerateNumberMutations,
+	m.MutationComparison: mutagens.GenerateComparisonMutations,
+	m.MutationLogical:    mutagens.GenerateLogicalMutations,
+	m.MutationUnary:      mutagens.GenerateUnaryMutations,
+	m.MutationBranch:     mutagens.GenerateBranchMutations,
+	m.MutationStatement:  mutagens.GenerateStatementMutations,
+	m.MutationLoop:       mutagens.GenerateLoopMutations,
+}
+
+func generateMutationsForNode(
+	mutationType m.MutationType,
+	n ast.Node,
+	fset *token.FileSet,
+	content []byte,
+	source m.Source,
+) []m.Mutation {
+	gen, ok := mutationGenerators[mutationType]
+	if !ok {
+		return nil
+	}
+
+	return gen(n, fset, content, source)
 }

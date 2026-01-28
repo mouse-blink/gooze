@@ -225,6 +225,38 @@ Gooze automatically selects the UI based on whether output is a TTY:
 
 To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 
+### Annotation skipping (`//gooze:ignore`)
+
+Skip generating mutations by placing a single annotation: `//gooze:ignore`.
+You can optionally provide a comma-separated list of mutagen names, e.g. `//gooze:ignore arithmetic,comparison`.
+
+Mutagen names match the labels shown in output, e.g. `arithmetic`, `comparison`, `numbers`, `boolean`, `logical`, `unary`, `branch`, `statement`, `loop`.
+
+Scope is determined by *where* the annotation appears:
+
+- **File**: if the annotation appears before the `package` declaration (typically the first line), it applies to the whole file.
+- **Function / method**: if the annotation is immediately above a `func` declaration, it applies to that entire function/method.
+- **Line**: if the annotation appears on its own line directly above a statement, or as a trailing comment on the same line, it applies only to that line.
+
+Examples:
+
+```go
+//gooze:ignore arithmetic,comparison
+package main
+
+//gooze:ignore
+func main() {
+   x := 1 + 2 //gooze:ignore numbers
+   if x > 0 { //gooze:ignore comparison
+      println(x)
+   }
+
+   //gooze:ignore
+   y := x + 1
+   _ = y
+}
+```
+
 
 ## Complete Go Mutation Testing Categories
 
@@ -254,7 +286,7 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 ## Roadmap
 
 ### Core Features
-- [ ] **Annotation Skipping**: Support `//gooze:ignore` comments to skip specific blocks or lines (Medium)
+- [x] **Annotation Skipping**: Support `//gooze:ignore` to skip file/function/line, optionally per mutagen (Medium)
 - [ ] **Custom Exec Hook**: Support custom test runner commands similar to `go-mutesting --exec` (High)
 - [ ] **Function Selection**: Allow mutating specific functions/methods via regex (High)
 - [ ] **Timeouts**: Per-mutation execution budgets to prevent infinite loops (Medium)
